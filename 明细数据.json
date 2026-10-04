@@ -1,0 +1,863 @@
+{
+  "version": "1.4.0",
+  "source": "dist/里世界_异闻增强版.html · read-only runtime export",
+  "endings": {
+    "car": {
+      "t": "《闸 门》",
+      "l": [
+        "你踩下油门的时候，雨刷自己在动。",
+        "后视镜里，教学楼一扇一扇地暗下去。",
+        "你没敢回头看副驾。"
+      ]
+    },
+    "face": {
+      "t": "《白名单》",
+      "l": [
+        "闸机亮了一下绿光。",
+        "你走出去，回头看了一眼——",
+        "里面的天还是黑白的。"
+      ]
+    },
+    "trash": {
+      "t": "《第三个桶》",
+      "l": [
+        "桶盖在头顶合上。",
+        "你听见垃圾车发动的声音。",
+        "有人在外面敲了两下桶壁。"
+      ]
+    },
+    "beast": {
+      "t": "《先 辈》",
+      "l": [
+        "门是被从外面撞开的。",
+        "你看清了那个背影——然后你跟着跑了出去。",
+        "整座学校第一次有了颜色。"
+      ]
+    },
+    "hollow": {
+      "t": "《替 身》",
+      "l": [
+        "他终于说话了。用的是你的声音。",
+        "你把名字留在天台，他穿着你的校服下了楼。",
+        "第二天点名时，回答「到」的那个人没有回头。"
+      ]
+    },
+    "lastrow": {
+      "t": "《最后一排》",
+      "l": [
+        "你在空白名册上签下了名字。",
+        "最后一排多出一张课桌，座位上坐着昨天的你。",
+        "下课铃响了很久。这一节课没有结束。"
+      ]
+    },
+    "callback": {
+      "t": "《回 拨》",
+      "l": [
+        "三段录音拼成了一句：「别接。」",
+        "你还是回拨了那个没有号码的来电。",
+        "听筒里是你的呼吸。教室里，每一部手机同时亮了。"
+      ]
+    }
+  },
+  "items": [
+    {
+      "id": "card",
+      "name": "学生证"
+    },
+    {
+      "id": "phone",
+      "name": "手机"
+    },
+    {
+      "id": "chalk",
+      "name": "粉笔"
+    },
+    {
+      "id": "map",
+      "name": "平面图"
+    },
+    {
+      "id": "key",
+      "name": "钥匙"
+    },
+    {
+      "id": "torch",
+      "name": "手电筒"
+    },
+    {
+      "id": "brolly",
+      "name": "雨伞"
+    },
+    {
+      "id": "coat",
+      "name": "校服外套"
+    },
+    {
+      "id": "pill",
+      "name": "药片"
+    },
+    {
+      "id": "notebook",
+      "name": "笔记本"
+    },
+    {
+      "id": "pen",
+      "name": "笔"
+    },
+    {
+      "id": "snack",
+      "name": "士力架"
+    },
+    {
+      "id": "battery",
+      "name": "电池"
+    },
+    {
+      "id": "compass",
+      "name": "罗盘"
+    },
+    {
+      "id": "metronome",
+      "name": "节拍器"
+    },
+    {
+      "id": "goggles",
+      "name": "护目镜"
+    },
+    {
+      "id": "hw",
+      "name": "作业本"
+    },
+    {
+      "id": "coin",
+      "name": "硬币"
+    },
+    {
+      "id": "usb",
+      "name": "U盘"
+    },
+    {
+      "id": "watch",
+      "name": "手表"
+    },
+    {
+      "id": "memo",
+      "name": "纸条"
+    }
+  ],
+  "talents": [
+    [
+      "code",
+      "编程社",
+      "机房那套东西，你看一眼就懂。"
+    ],
+    [
+      "drive",
+      "车感好",
+      "你爸教过你开车。这事你没跟人说过。"
+    ],
+    [
+      "map",
+      "过目不忘",
+      "走过的路，你不会忘。"
+    ],
+    [
+      "stomach",
+      "铁胃",
+      "你的胃比一般人结实。"
+    ],
+    [
+      "night",
+      "夜视",
+      "暗的地方你也看得清。"
+    ],
+    [
+      "hand",
+      "手稳",
+      "你扔东西很少失手。"
+    ],
+    [
+      "watch",
+      "秒表",
+      "你手腕上有一块带秒针的表。"
+    ],
+    [
+      "thin",
+      "瘦小",
+      "你比同龄人瘦小一圈。"
+    ],
+    [
+      "cold",
+      "血冷",
+      "你不容易慌。慌起来也慢。"
+    ],
+    [
+      "known",
+      "熟人",
+      "保安叫得出你的名字。"
+    ],
+    [
+      "immune",
+      "天生免疫",
+      "总有那么一次，要命的事会绕开你。"
+    ],
+    [
+      "crowd",
+      "藏在人群里",
+      "人多的时候，你不显眼。"
+    ]
+  ],
+  "anomalies": [
+    {
+      "id": "rain",
+      "name": "大暴雨",
+      "note": "雨 ▓ 来的时候，找 ▓ 地方 ▓。"
+    },
+    {
+      "id": "moth",
+      "name": "蛾群",
+      "note": "蛾 ▓ 怕 ▓ 屋 ▓。"
+    },
+    {
+      "id": "turn",
+      "name": "被拍肩膀",
+      "note": "后面那个东西 ▓▓ 拍你。别 ▓▓ 看。看 ▓ 就 ▓ 了。"
+    },
+    {
+      "id": "broad",
+      "name": "广播点名",
+      "note": "广播 ▓ 名字的时候，脚 ▓▓ 别 ▓。四 ▓ 就过去了。"
+    },
+    {
+      "id": "bell13",
+      "name": "钟敲十三下",
+      "note": "敲 ▓ 十三 ▓ 之前，回 ▓ 位子上。"
+    },
+    {
+      "id": "exercise",
+      "name": "操场做操",
+      "note": "别 ▓ 他们 ▓ 太近。跟 ▓ 动 ▓ 就 ▓ 了。"
+    },
+    {
+      "id": "bells",
+      "name": "车棚齐鸣",
+      "note": "车 ▓ 一起响的 ▓ 候，离 ▓ 远 ▓。"
+    },
+    {
+      "id": "hand",
+      "name": "隔间递手",
+      "note": "隔间 ▓ 面递过来的 ▓ 西，不 ▓ 接。"
+    },
+    {
+      "id": "repeat",
+      "name": "你作业交了吗",
+      "note": "他问 ▓ 作业。别 ▓ 答。有 ▓ 就 ▓ 给他。"
+    },
+    {
+      "id": "chalk",
+      "name": "「下一次」",
+      "note": "有 ▓ 西会把 ▓ 时间 ▓ 下来。看 ▓ 它。"
+    },
+    {
+      "id": "feast",
+      "name": "食堂盛宴",
+      "note": "食 ▓ 的饭 ▓ 吃。待 ▓ 了 ▓ 出不 ▓。"
+    },
+    {
+      "id": "necker",
+      "name": "围墙外的行人",
+      "note": "围墙 ▓ 面的人。别 ▓ 近。"
+    },
+    {
+      "id": "loop",
+      "name": "无尽的走廊",
+      "note": "走廊 ▓ 复的 ▓ 候，跑 ▓ 来。"
+    },
+    {
+      "id": "leak",
+      "name": "天花板渗水",
+      "note": "头 ▓ 滴水的 ▓ 方，别 ▓ 着。"
+    },
+    {
+      "id": "roster",
+      "name": "被划掉的名字",
+      "note": "名 ▓ 被划 ▓ 了。讲 ▓ 上 ▓ 笔能 ▓ 回来。"
+    },
+    {
+      "id": "shadow",
+      "name": "影子慢一拍",
+      "note": "影 ▓ 跟不 ▓ 上的 ▓ 候，进 ▓ 去。"
+    },
+    {
+      "id": "rite",
+      "name": "实验楼仪式",
+      "note": "圈 ▓ 别 ▓ 进 ▓。"
+    },
+    {
+      "id": "cold",
+      "name": "冷库",
+      "note": "冷 ▓ 里挂 ▓ 的 ▓ 西，走 ▓ 看 ▓ 楚。是 ▓ 服。"
+    },
+    {
+      "id": "raindots",
+      "name": "雨点成字",
+      "note": "雨 ▓ 排成 ▓ 的 ▓ 候，明 ▓ 是 ▓。"
+    },
+    {
+      "id": "shifting",
+      "name": "窗外的楼在动",
+      "note": "楼 ▓ 动的 ▓ 候，看 ▓ 楼。它 ▓ 动。"
+    },
+    {
+      "id": "stare",
+      "name": "全体回头",
+      "note": "全 ▓ 同时回头 ▓ 你。别 ▓ 下。走 ▓ 就 ▓ 事。"
+    },
+    {
+      "id": "twin",
+      "name": "天台的第二个你",
+      "note": "天 ▓ 上站 ▓ 一个 ▓。别 ▓ 去，也 ▓ 喊。"
+    },
+    {
+      "id": "lamps",
+      "name": "熄灯后的走廊灯",
+      "note": "熄 ▓ 之后 ▓ 会 ▓ 你。站 ▓ 灯 ▓ ▓ 别 ▓。"
+    }
+  ],
+  "schedule": [
+    [
+      440,
+      480,
+      "早读",
+      "教室",
+      80
+    ],
+    [
+      480,
+      525,
+      "第 1 节",
+      "教室",
+      80
+    ],
+    [
+      525,
+      545,
+      "课间",
+      "自由",
+      12
+    ],
+    [
+      545,
+      590,
+      "第 2 节",
+      "教室",
+      80
+    ],
+    [
+      590,
+      620,
+      "课间操",
+      "自由",
+      30
+    ],
+    [
+      620,
+      665,
+      "第 3 节",
+      "教室",
+      80
+    ],
+    [
+      665,
+      685,
+      "课间",
+      "自由",
+      12
+    ],
+    [
+      685,
+      730,
+      "第 4 节",
+      "教室",
+      80
+    ],
+    [
+      730,
+      810,
+      "午饭",
+      "自由",
+      14
+    ],
+    [
+      810,
+      870,
+      "午休",
+      "自由",
+      14
+    ],
+    [
+      870,
+      915,
+      "第 5 节",
+      "教室",
+      80
+    ],
+    [
+      915,
+      960,
+      "第 6 节",
+      "教室",
+      80
+    ],
+    [
+      960,
+      1005,
+      "第 7 节",
+      "教室",
+      80
+    ],
+    [
+      1005,
+      1025,
+      "课间",
+      "自由",
+      12
+    ],
+    [
+      1025,
+      1080,
+      "课外活动",
+      "自由",
+      37
+    ],
+    [
+      1080,
+      1150,
+      "晚饭",
+      "自由",
+      14
+    ],
+    [
+      1150,
+      1290,
+      "晚自习",
+      "教室",
+      17
+    ],
+    [
+      1290,
+      1500,
+      "熄灯后",
+      "自由",
+      17
+    ]
+  ],
+  "activities": {
+    "piano": {
+      "n": "弹钢琴",
+      "dur": 26,
+      "rate": 1.7,
+      "key": "p",
+      "where": [
+        "lab5"
+      ]
+    },
+    "computer": {
+      "n": "玩电脑",
+      "dur": 22,
+      "rate": 1.35,
+      "key": "n",
+      "where": [
+        "lab3"
+      ]
+    },
+    "sleep": {
+      "n": "睡一会儿",
+      "dur": 42,
+      "rate": 2.3,
+      "key": "b",
+      "where": "dorm"
+    },
+    "eat": {
+      "n": "吃点东西",
+      "dur": 20,
+      "rate": 1.15,
+      "key": "t",
+      "where": [
+        "canteen1"
+      ]
+    },
+    "wash": {
+      "n": "洗把脸",
+      "dur": 12,
+      "rate": 1.5,
+      "key": "w",
+      "where": "any"
+    },
+    "hoop": {
+      "n": "投篮",
+      "dur": 20,
+      "rate": 1.6,
+      "key": null,
+      "out": "court"
+    },
+    "jog": {
+      "n": "绕着操场跑",
+      "dur": 26,
+      "rate": 1.9,
+      "key": null,
+      "out": "field"
+    }
+  },
+  "defaultExpansionOptions": {
+    "bgm": true,
+    "musicVolume": 0.28,
+    "impactVolume": 0.45,
+    "flash": false,
+    "jumps": true,
+    "impact": true,
+    "intensity": 0.6,
+    "sensitivity": 1,
+    "bob": true,
+    "detail": true,
+    "fpMap": false,
+    "brightness": 1,
+    "particles": true
+  },
+  "indoorScenes": [
+    {
+      "id": "teach1",
+      "name": "教学楼 1F",
+      "host": "teach",
+      "floor": 1,
+      "columns": 63,
+      "rows": 26
+    },
+    {
+      "id": "teach2",
+      "name": "教学楼 2F",
+      "host": "teach",
+      "floor": 2,
+      "columns": 63,
+      "rows": 26
+    },
+    {
+      "id": "teach3",
+      "name": "教学楼 3F",
+      "host": "teach",
+      "floor": 3,
+      "columns": 63,
+      "rows": 26
+    },
+    {
+      "id": "teach4",
+      "name": "教学楼 4F",
+      "host": "teach",
+      "floor": 4,
+      "columns": 63,
+      "rows": 26
+    },
+    {
+      "id": "teach5",
+      "name": "教学楼 5F",
+      "host": "teach",
+      "floor": 5,
+      "columns": 63,
+      "rows": 26
+    },
+    {
+      "id": "teach6",
+      "name": "教学楼 天台",
+      "host": "teach",
+      "floor": 6,
+      "columns": 30,
+      "rows": 18
+    },
+    {
+      "id": "admin1",
+      "name": "行政楼 1F",
+      "host": "admin",
+      "floor": 1,
+      "columns": 53,
+      "rows": 22
+    },
+    {
+      "id": "admin2",
+      "name": "行政楼 2F",
+      "host": "admin",
+      "floor": 2,
+      "columns": 53,
+      "rows": 22
+    },
+    {
+      "id": "admin3",
+      "name": "行政楼 3F",
+      "host": "admin",
+      "floor": 3,
+      "columns": 53,
+      "rows": 22
+    },
+    {
+      "id": "admin4",
+      "name": "行政楼 4F",
+      "host": "admin",
+      "floor": 4,
+      "columns": 53,
+      "rows": 22
+    },
+    {
+      "id": "admin5",
+      "name": "行政楼 5F",
+      "host": "admin",
+      "floor": 5,
+      "columns": 53,
+      "rows": 22
+    },
+    {
+      "id": "lab1",
+      "name": "实验楼 1F · 物理实验室",
+      "host": "lab",
+      "floor": 1,
+      "columns": 50,
+      "rows": 20
+    },
+    {
+      "id": "lab2",
+      "name": "实验楼 2F · 化学实验室",
+      "host": "lab",
+      "floor": 2,
+      "columns": 50,
+      "rows": 20
+    },
+    {
+      "id": "lab3",
+      "name": "实验楼 3F · 计算机教室",
+      "host": "lab",
+      "floor": 3,
+      "columns": 50,
+      "rows": 20
+    },
+    {
+      "id": "lab4",
+      "name": "实验楼 4F · 地理教室",
+      "host": "lab",
+      "floor": 4,
+      "columns": 50,
+      "rows": 20
+    },
+    {
+      "id": "lab5",
+      "name": "实验楼 5F · 音乐教室",
+      "host": "lab",
+      "floor": 5,
+      "columns": 50,
+      "rows": 20
+    },
+    {
+      "id": "canteen1",
+      "name": "食堂 1F",
+      "host": "canteen",
+      "floor": 1,
+      "columns": 62,
+      "rows": 28
+    },
+    {
+      "id": "dorm1",
+      "name": "宿舍 1F",
+      "host": "dormN",
+      "floor": 1,
+      "columns": 44,
+      "rows": 16
+    },
+    {
+      "id": "dorm2",
+      "name": "宿舍 2F",
+      "host": "dormN",
+      "floor": 2,
+      "columns": 44,
+      "rows": 16
+    },
+    {
+      "id": "dorm3",
+      "name": "宿舍 3F",
+      "host": "dormN",
+      "floor": 3,
+      "columns": 44,
+      "rows": 16
+    },
+    {
+      "id": "dorm4",
+      "name": "宿舍 4F",
+      "host": "dormS",
+      "floor": 4,
+      "columns": 44,
+      "rows": 16
+    },
+    {
+      "id": "dorm5",
+      "name": "宿舍 5F",
+      "host": "dormS",
+      "floor": 5,
+      "columns": 44,
+      "rows": 16
+    },
+    {
+      "id": "dorm6",
+      "name": "宿舍 6F",
+      "host": "dormS",
+      "floor": 6,
+      "columns": 44,
+      "rows": 16
+    },
+    {
+      "id": "garage1",
+      "name": "地下车库",
+      "host": "garw",
+      "floor": -1,
+      "columns": 60,
+      "rows": 26
+    },
+    {
+      "id": "trash1",
+      "name": "垃圾房",
+      "host": "trash",
+      "floor": -1,
+      "columns": 7,
+      "rows": 5
+    },
+    {
+      "id": "guard1",
+      "name": "保安岗",
+      "host": "guard",
+      "floor": 1,
+      "columns": 6,
+      "rows": 8
+    },
+    {
+      "id": "gear1",
+      "name": "体育器材室",
+      "host": "gear",
+      "floor": 1,
+      "columns": 7,
+      "rows": 6
+    }
+  ],
+  "outdoorObjects": [
+    {
+      "id": "field",
+      "name": "大操场",
+      "type": "walk"
+    },
+    {
+      "id": "court",
+      "name": "篮球场",
+      "type": "walk"
+    },
+    {
+      "id": "track",
+      "name": "小跑道",
+      "type": "walk"
+    },
+    {
+      "id": "bad3",
+      "name": "三个羽毛球场",
+      "type": "walk"
+    },
+    {
+      "id": "bad2",
+      "name": "两个羽毛球场",
+      "type": "walk"
+    },
+    {
+      "id": "garden",
+      "name": "花园",
+      "type": "walk"
+    },
+    {
+      "id": "garage",
+      "name": "地下车库出入口",
+      "type": "solid"
+    },
+    {
+      "id": "guard",
+      "name": "保安岗",
+      "type": "solid"
+    },
+    {
+      "id": "shed",
+      "name": "电动车棚",
+      "type": "solid"
+    },
+    {
+      "id": "gear",
+      "name": "体育器材室",
+      "type": "solid"
+    },
+    {
+      "id": "garw",
+      "name": "地下车库人行口",
+      "type": "solid"
+    },
+    {
+      "id": "trash",
+      "name": "垃圾房",
+      "type": "solid"
+    },
+    {
+      "id": "admin",
+      "name": "行政楼",
+      "type": "solid"
+    },
+    {
+      "id": "lab",
+      "name": "实验楼",
+      "type": "solid"
+    },
+    {
+      "id": "teach",
+      "name": "教学楼",
+      "type": "solid"
+    },
+    {
+      "id": "bell",
+      "name": "钟楼",
+      "type": "solid"
+    },
+    {
+      "id": "dormN",
+      "name": "宿舍",
+      "type": "solid"
+    },
+    {
+      "id": "canteen",
+      "name": "食堂",
+      "type": "solid"
+    },
+    {
+      "id": "dormS",
+      "name": "宿舍",
+      "type": "solid"
+    },
+    {
+      "id": "c1",
+      "name": "连廊①",
+      "type": "elev"
+    },
+    {
+      "id": "c2",
+      "name": "连廊②",
+      "type": "elev"
+    }
+  ],
+  "originalEndingIds": [
+    "car",
+    "face",
+    "trash",
+    "beast"
+  ],
+  "newEndingIds": [
+    "hollow",
+    "lastrow",
+    "callback"
+  ]
+}

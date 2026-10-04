@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101711">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="武大附中 · 里世界。原地图、原玩法，桌面与触屏界面重构版。">
+<title>武大附中 · 里世界 | 精绘 1.5</title>
+<link rel="stylesheet" href="src/ui.css">
+<link rel="stylesheet" href="src/expansion.css">
+<link rel="stylesheet" href="src/presentation.css">
+</head>
+<body>
+<div id="wrap"><canvas id="cv" aria-label="里世界游戏画面"></canvas></div>
+<div id="hud">
+ <div id="vign"></div>
+ <header id="top">
+  <div class="hud-vitals">
+   <div class="vital"><div class="vital-row"><span id="san-label">精神 · SAN</span><span class="vital-value" id="san-value">100</span></div><div class="meter" id="sanbox" role="meter" aria-label="精神值" aria-valuemin="0" aria-valuemax="100"><div id="sanbar"></div></div></div>
+   <div class="vital stamina"><div class="vital-row"><span>体力</span><span class="vital-value" id="stam-value">100</span></div><div class="meter" role="meter" id="stambox" aria-label="体力值" aria-valuemin="0" aria-valuemax="100"><div id="stambar"></div></div></div>
+  </div>
+  <div class="hud-time"><div class="time-data"><div id="clock">11:40</div><span id="day-label">第 1 天</span></div><div id="sched">第 4 节 · 教室</div></div>
+  <div class="hud-actions"><button class="icon-btn secondary-hud" id="fullscreen-btn" type="button" aria-label="全屏" title="全屏" data-icon="expand"></button><button class="icon-btn" id="pausebtn" type="button" aria-label="暂停游戏" title="暂停 · Esc" data-icon="pause"></button></div>
+ </header>
+ <div class="location-row"><span class="location-mark"></span><div id="locname">教学楼 4F</div></div>
+ <div id="toast" role="status"></div><div id="dev">精绘 1.5</div><div id="prompt"></div><div id="choices"></div>
+</div>
+<nav id="desktop-tools" aria-label="游戏工具"><button class="tool" id="bagbtn" type="button"><i data-icon="bag"></i>背包 <kbd>B</kbd></button><button class="tool" id="deskMap" type="button"><i data-icon="map"></i>地图 <kbd>M</kbd></button><button class="tool" id="deskThink" type="button"><i data-icon="think"></i>思索 <kbd>H</kbd></button><button class="tool" id="deskNotes" type="button"><i data-icon="notes"></i>清单 <kbd>J</kbd></button><button class="tool" id="deskView" type="button"><i data-icon="eye"></i>视角 <kbd>V</kbd></button></nav>
+<div id="keyboard-hint"><kbd>W A S D</kbd> 移动　<kbd>Shift</kbd> 疾跑　<kbd>E</kbd> 互动　<kbd>F</kbd> 拾取</div>
+<div id="hotbar" aria-label="快捷栏"></div><div id="mini-anchor" aria-hidden="true"></div>
+<div id="talent-tag" title="你的天赋"></div><div id="tut" aria-live="polite"></div>
+<div id="mobile-ui" aria-label="触屏操作">
+ <div id="stick-dock" aria-hidden="true"><span class="stick-ring"></span><span class="stick-knob">移动</span></div>
+ <div id="mobile-actions"><button type="button" id="mobDown" aria-label="下楼">下楼 ↓</button><div class="mobile-primary"><button type="button" id="mobRun" aria-label="按住疾跑"><i data-icon="run"></i><span>疾跑</span></button><button type="button" id="mobAct" aria-label="互动"><i data-icon="hand"></i><span id="mob-act-label">互动</span></button></div></div>
+ <nav id="mobile-shortcuts" aria-label="触屏工具"><button type="button" id="mobMap"><i data-icon="map"></i><span>地图</span></button><button type="button" id="mobThink"><i data-icon="think"></i><span>思索</span></button><button type="button" id="mobView"><i data-icon="eye"></i><span>视角</span></button><button type="button" id="mobBag"><i data-icon="bag"></i><span>背包</span></button><button type="button" id="mobNotes"><i data-icon="notes"></i><span>清单</span></button><button type="button" id="mobPickup"><i data-icon="pickup"></i><span id="pickup-label">拾取</span></button></nav>
+ <div id="look-hint" aria-hidden="true">右侧空白处滑动 · 转动视角</div>
+</div>
+<div id="map-shell"><header class="map-header"><div><p class="eyebrow">CAMPUS / ORIENTATION</p><h2>校园平面图</h2></div><button id="map-close" class="icon-btn" type="button" aria-label="关闭地图" data-icon="close"></button></header><div id="map-stage"></div><footer class="map-footer"><div id="map-caption"></div><button id="map-mark" class="btn" type="button"><i data-icon="pin"></i> 标记当前位置</button></footer></div>
+<div id="inv" class="overlay" role="dialog" aria-modal="true" aria-labelledby="bag-title"><section id="invbox" class="panel" tabindex="-1"><header class="invhead"><div><p class="eyebrow">PERSONAL BELONGINGS</p><h2 id="bag-title">随身背包 <span id="bag-count" class="panel-sub">4 / 8</span></h2></div><button id="bag-close" class="icon-btn" type="button" aria-label="关闭背包" data-icon="close"></button></header><div class="bag-layout"><div><div id="grid" role="group" aria-label="背包物品"></div><div id="bagnote"></div><div id="bagfoot">点选物品查看详情 · 1–8 使用对应物品</div></div><aside aria-label="物品详情"><p class="eyebrow">SELECTED ITEM</p><h3 id="bag-detail-name"></h3><p id="bag-detail-hint"></p><button id="bag-use" class="btn primary" type="button">使用物品</button><div class="bag-actions"><button id="bag-hot-1" type="button">快捷 1</button><button id="bag-hot-2" type="button">快捷 2</button><button id="bag-drop" type="button" class="danger">放下</button></div></aside></div><footer class="panel-footer"><div id="talfoot"></div><span class="live-label">时间仍在流逝</span></footer></section></div>
+<div id="notes" class="overlay" role="dialog" aria-modal="true" aria-labelledby="notes-title"><section id="notesbox" class="panel" tabindex="-1"><header class="invhead"><div><p class="eyebrow">NOTES / WHAT I REMEMBER</p><h2 id="notes-title">我的清单</h2></div><button id="notes-close" class="icon-btn" type="button" aria-label="关闭清单" data-icon="close"></button></header><div id="notesbody"></div><footer class="panel-footer"><span>记下的事，比记忆可靠。</span><span class="live-label">时间仍在流逝</span></footer></section></div>
+<div id="title" aria-hidden="true"></div>
+<main id="menuUI" aria-label="主菜单"><header class="menu-mast"><div class="mast-brand"><span class="mast-mark">附</span>武大附中<span class="muted"> / </span>异校档案</div><div class="mast-status"><i class="red-dot"></i>未归档的梦 <span>　/　NO. 004</span></div></header><div class="menu-layout"><section class="menu-hero"><span class="hero-number" aria-hidden="true">04</span><p class="hero-kicker">校园异闻 · 生存探索</p><h1>里世界<b>。</b></h1><p class="hero-en">THE OTHER SIDE OF CAMPUS</p><p class="hero-line">你睁开眼。教室里一个人也没有。<br>这不是你转来的那个学校。</p><div class="hero-time"><strong>11:40</strong><span>高二（二）班<br>第四节 · 语文</span></div></section><section id="menu-panel" class="menu-panel"><div class="menu-panel-head"><h2 id="menu-subtitle">从这里醒来</h2><span class="menu-index">DREAM / 01</span></div><div id="menu-items"></div><div id="menu-note" role="status"></div></section></div><footer class="menu-foot"><div class="foot-left"><span><i data-icon="headphones"></i>先调低音量</span><span class="foot-extra">可选恐怖模式 · 默认关闭</span></div><span>精绘 1.5 · 原地图 / 精绘界面</span></footer></main>
+<div id="pro" class="overlay" role="dialog" aria-modal="true" aria-label="前情提要"><p class="eyebrow">BEFORE THE DREAM</p><div id="protext"></div><div id="pro-count">01 / 11</div><div id="prohint">点击空白处 / 空格 继续</div><button id="proskip" class="btn" type="button">跳过序章 →</button></div>
+<div id="devp"></div><div id="devtag"></div><div id="devpv"></div>
+<section id="dlg" role="dialog" aria-modal="false" aria-labelledby="dlg-text"><div id="dlgb"><div class="dialog-head"><p class="eyebrow"><i class="red-dot"></i>此刻的选择</p><button id="dlg-close" class="icon-btn" type="button" aria-label="收起对话" data-icon="close"></button></div><p id="dlg-text"></p></div><div id="dlgc"></div><div class="dialog-foot">可以继续移动 · 时间不会因选择停下</div></section>
+<div id="sub" aria-live="polite" aria-atomic="false"></div><div id="fade"></div>
+<div id="dead" class="overlay" role="dialog" aria-modal="true" aria-label="死亡"><div class="death-symbol" aria-hidden="true">终</div><p class="eyebrow">THIS DREAM HAS ENDED</p><div class="t">你死了。</div><div class="cause" id="deadcause"></div><div class="epi" id="deadepi"></div><button class="btn" id="deadbtn" type="button">返回主菜单 →</button></div>
+<section id="end" class="ending-screen" role="dialog" aria-modal="true" aria-labelledby="endt"><header><p class="eyebrow">ON THE OTHER SIDE</p><h1 id="endt"></h1><p id="ending-progress"></p></header><div id="end-art" aria-hidden="true"></div><ul id="endl"></ul><button class="btn primary" id="endbtn" type="button">返回主菜单 →</button></section>
+<div id="pause" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title"><section class="panel" tabindex="-1"><header class="panel-head"><div><p class="eyebrow">TAKE A BREATH</p><h2 id="pause-title">暂时停留</h2></div><button id="pause-close" class="icon-btn" type="button" aria-label="继续游戏" data-icon="close"></button></header><div class="pause-grid"><nav class="pause-buttons" aria-label="暂停菜单"><button class="btn primary" id="pbResume" type="button">继续游戏 <span>RESUME →</span></button><button class="btn" id="pbSave" type="button">保存进度 <span>SAVE</span></button><button class="btn" id="pbLoad" type="button">读取进度 <span>LOAD</span></button><button class="btn" id="pbSet" type="button" aria-expanded="false">游戏设置 <span>SETTINGS</span></button><button class="btn danger" id="pbMenu" type="button">返回主菜单 <span>MENU</span></button></nav><aside class="pause-side"><p class="eyebrow">操作备忘</p><div id="pausehelp"></div><p class="help-note">只有暂停和地图会暂停游戏时间。<br>背包、清单和抉择打开时，世界仍在继续。</p></aside></div><section id="pset" aria-label="游戏设置"><div class="row"><label for="stVol">主音量</label><input type="range" id="stVol" min="0" max="100" value="50"><span id="stVolv">50</span></div><div class="row"><label for="stShake">屏幕震动</label><input type="checkbox" id="stShake" checked></div><div class="row"><label for="stBoil">线条沸腾</label><input type="checkbox" id="stBoil" checked></div><div class="row"><label for="stAmb">环境音</label><input type="checkbox" id="stAmb" checked></div><div class="row"><label for="stQ">画质上限</label><input type="range" id="stQ" min="0" max="2" value="2"><span id="stQv">高</span></div><div class="row"><label for="stSub">字幕停留</label><input type="range" id="stSub" min="1" max="8" value="4"><span id="stSubv">4s</span></div><div class="row"><label for="stTouch">操作界面</label><select id="stTouch"><option value="auto">自动识别设备</option><option value="touch">触屏操作</option><option value="keyboard">键盘与鼠标</option></select></div></section><div id="pmsg" role="status"></div></section></div>
+
+<div id="expansion-root"></div>
+<script src="src/portrait-art.js"></script>
+<script src="src/expansion.js"></script>
+<script src="src/presentation.js"></script>
+<script src="src/game.js"></script>
+</body>
+</html>
