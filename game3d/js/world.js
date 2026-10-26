@@ -6,7 +6,7 @@ function clearWorldMesh(){
   function disposeGroup(g){
     if(!g) return;
     if(g.geometry&&g.geometry.dispose) g.geometry.dispose();
-    if(g.material&&g.material.dispose) g.material.dispose();
+    if(g.material&&g.material.dispose&&!(g.material.userData&&g.material.userData.shared)) g.material.dispose();   /* 共享材质（materials.js）不能销毁 */
     if(g.children){ for(var k=0;k<g.children.length;k++) disposeGroup(g.children[k]); }
   }
   if(GLR.roamFig){ GLR.scene.remove(GLR.roamFig); GLR.roamFig=null; }

@@ -127,18 +127,14 @@ function ncOccupied(c,r){
   if(!NC.occ) return false;
   return !!NC.occ[c+','+r];
 }
+/* 坐在课桌前、两只手搭在桌面上的同学。人形正面朝 +z，这里转半圈：整组正面朝 -z（朝黑板） */
 function ncSeatFigure(mat,x,y,z,rotY){
   var g=new THREE.Group();
-  anfxBox(g,mat,0.34,0.46,0.24,0,0.72,0);        /* 胸背 */
-  anfxBox(g,mat,0.19,0.19,0.19,0,1.06,-0.03);    /* 头 */
-  anfxBox(g,mat,0.34,0.14,0.16,0,0.50,0.02);     /* 腰（坐在椅面上） */
-  anfxBox(g,mat,0.13,0.13,0.30,-0.20,0.62,-0.18);/* 左臂搭在桌上 */
-  anfxBox(g,mat,0.13,0.13,0.30, 0.20,0.62,-0.18);/* 右臂 */
-  anfxBox(g,mat,0.12,0.34,0.30,-0.10,0.34,-0.16);/* 腿（被课桌挡住） */
-  anfxBox(g,mat,0.12,0.34,0.30, 0.10,0.34,-0.16);
+  var me=figMesh('sit',mat,1); me.rotation.y=Math.PI;
+  g.add(me);
   g.position.set(x,y||0,z);
   g.rotation.y=rotY||0;
-  g.userData={hx:x,hz:z,ty:rotY||0,standing:0};
+  g.userData={hx:x,hz:z,ty:rotY||0,standing:0,mesh:me};
   return g;
 }
 function ncBuild(R){
@@ -173,12 +169,7 @@ function ncBuild(R){
   if(tc!==null){
     var tw=worldToScene(R.ox+(tc+0.5)*R.tw, R.oy+(tr+1.6)*R.th, R);
     var tg=new THREE.Group();
-    anfxBox(tg,NC.matN,0.14,1.30,0.14,-0.11,0.65,0);
-    anfxBox(tg,NC.matN,0.14,1.30,0.14, 0.11,0.65,0);
-    anfxBox(tg,NC.matN,0.40,0.86,0.22, 0,1.62,0);
-    anfxBox(tg,NC.matN,0.09,1.16,0.09,-0.25,1.36,0.02);
-    anfxBox(tg,NC.matN,0.09,1.16,0.09, 0.25,1.36,0.02);
-    anfxBox(tg,NC.matN,0.21,0.24,0.21, 0,2.28,0);
+    tg.add(figMesh('teacher',NC.matN,1));                         /* 讲台边的老师，面朝全班（+z） */
     tg.position.set(tw.x,0,tw.z);
     tg.rotation.y=0;
     tg.userData={hx:tw.x,hz:tw.z,ty:0,standing:1};
@@ -251,7 +242,7 @@ function ncUpdate(dt){
       tz=p.z+Math.sin(a3)*rad;
     }
     if(ud.standing<1) ud.standing=Math.min(1,ud.standing+dt*0.8);
-    f.position.y=ud.standing*0.30;
+    if(ud.mesh&&ud.standing>0.5&&!ud.stood){ ud.stood=1; ud.mesh.geometry=figGeo('person'); }   /* 站起来：换成站姿（以前是把坐姿整体抬高 30 公分） */
     var dx=tx-f.position.x, dz=tz-f.position.z, dl=Math.hypot(dx,dz);
     if(dl>0.08){
       var sp=Math.min(dl,dt*(v>=92?1.9:1.2));

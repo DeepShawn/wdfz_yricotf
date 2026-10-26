@@ -1,656 +1,469 @@
-/* 里世界 3D · 室内建模 */
+/* 里世界 3D · 室内建模
+   buildRoomGeometry(R) —— 根据网格生成一层楼：
+     地面（按房间换材质：教室地砖、走廊水磨石、车库混凝土……）
+     墙：相邻的墙格合并成大块（以前逐格方块，一层楼上千个），露在外面的一侧加踢脚、墙裙、腰线
+     吊顶 + 灯盘、门（门框、门套、带小窗的门扇、把手、门牌；开着的门会转开）、楼梯、出口
+     家具（见 furniture.js）和每种房间自己的布置（黑板、窗、储物柜、管道、通风橱……）
+   副作用：R.stairExtra / R.propExtra（碰撞，米）和 R.stats。 */
 'use strict';
+
+function roomTheme(R){
+  var t={floor:'ftile', fcol:PALETTE.floor, wall:PALETTE.wall, wallMat:'plaster', low:0x8b867e, skirt:0x242c32, ceil:0x3a4248, rail:0x6a5a48};
+  if(R.id==='garage1'){ t.floor='fconcrete'; t.fcol=0x6a6a66; t.wall=0x8a8a84; t.wallMat='concrete'; t.low=0x4a4a46; t.ceil=0x2a2e30; }
+  else if(R.id==='trash1'){ t.floor='fconcrete'; t.fcol=0x7a7a72; t.wall=0xa8aca0; t.low=0x6a7068; }
+  else if(R.host==='bell'){ t.floor='fstone'; t.fcol=0x8a8478; t.low=0x6a5a4a; t.ceil=0x2a2420; }
+  else if(R.id==='gear1'){ t.floor='fwood'; t.fcol=0x9a7a52; t.wall=0x27502f; t.low=0x1e3e24; }
+  else if(R.id==='teach6'){ t.floor='fconcrete'; t.fcol=0x8a8680; t.wall=0xa8a49c; t.wallMat='concrete'; }
+  else if(R.host==='c1'||R.host==='c2'){ t.floor='fterrazzo'; t.fcol=0x9a968e; }
+  else if(R.host==='canteen'){ t.fcol=0x9a968e; t.low=0x7a8a84; }
+  return t;
+}
 
 function buildRoomGeometry(R){
   S.__pianoPlaced=0;
   R.stats={desk:0, cubicle:0, chair:0, seat:0};
   R.stairExtra=[];                 /* 以前每进一次房间都往里追加一遍，越积越多 */
   R.propExtra=[];                  /* 大件家具的真实占地（米，房间中心为原点） */
-  function solidM(cx,cz,sx,sz){ R.propExtra.push({x0:cx-sx/2,x1:cx+sx/2,z0:cz-sz/2,z1:cz+sz/2}); }
+  var K=new Kit();
+  var W=R.cols,H=R.rows,tw=TTILE*U2M,th=TTILE*U2M;
+  var halfW=W*tw*0.5, halfH=H*th*0.5;
+  var isRoof=(R.host==='teach'&&R.floor===6);
+  var TH=roomTheme(R);
+  function CX(c){ return (c+0.5)*tw-halfW; }
+  function CZ(r){ return (r+0.5)*th-halfH; }
+  var c={R:R,K:K,W:W,H:H,tw:tw,th:th,halfW:halfW,halfH:halfH,CX:CX,CZ:CZ,theme:TH,
+    solid:function(cx,cz,sx,sz){ R.propExtra.push({x0:cx-sx/2,x1:cx+sx/2,z0:cz-sz/2,z1:cz+sz/2}); },
+    ao:function(cx,cz,sx,sz,s){ K.g('decal').aoPatch(cx,cz,sx,sz,s); }};
+  function G(y,x){ return (y>=0&&x>=0&&y<H&&x<W)?R.grid[y][x]:null; }
+
+  /* ---- 楼梯井要挖掉的墙格 ---- */
   var STAIR_CUT={};
   (function(){
     var cx2,cy2;
-    for(cy2=0;cy2<R.rows;cy2++){
-      for(cx2=0;cx2<R.cols;cx2++){
-        if(R.grid[cy2][cx2]!=='S') continue;
-        if((cx2>0&&R.grid[cy2][cx2-1]==='S')||(cy2>0&&R.grid[cy2-1][cx2]==='S')) continue;
-        var si=stairInfo(R,cx2,cy2);
-        if(si.block!==-1) continue;
-        var ii, mx2, my2;
-        for(ii=0;ii<(si.longX?si.gw:si.gd);ii++){
-          mx2=cx2+si.dx+(si.longX?ii:0); my2=cy2+si.dy+(si.longX?0:ii);
-          if(mx2>=0&&my2>=0&&mx2<R.cols&&my2<R.rows&&R.grid[my2][mx2]==='#') STAIR_CUT[mx2+','+my2]=1;
-        }
+    for(cy2=0;cy2<H;cy2++) for(cx2=0;cx2<W;cx2++){
+      if(R.grid[cy2][cx2]!=='S') continue;
+      if((cx2>0&&R.grid[cy2][cx2-1]==='S')||(cy2>0&&R.grid[cy2-1][cx2]==='S')) continue;
+      var si=stairInfo(R,cx2,cy2);
+      if(si.block!==-1) continue;
+      var ii, mx2, my2;
+      for(ii=0;ii<(si.longX?si.gw:si.gd);ii++){
+        mx2=cx2+si.dx+(si.longX?ii:0); my2=cy2+si.dy+(si.longX?0:ii);
+        if(mx2>=0&&my2>=0&&mx2<W&&my2<H&&R.grid[my2][mx2]==='#') STAIR_CUT[mx2+','+my2]=1;
       }
     }
   })();
-  var B=new BoxBuilder();      /* 墙 + 家具 */
-  var BF=new BoxBuilder();     /* 地面（地砖贴图） */      /* 受光实体 */
-  var G=new BoxBuilder();      /* 自发光（窗、灯管）：不吃光照，始终亮 */
-  var W=R.cols,H=R.rows,tw=TTILE*U2M,th=TTILE*U2M;
-  var halfW=W*tw*0.5, halfH=H*th*0.5;
-  var i,x,y,ch;
-  var isRoof=(R.host==='teach'&&R.floor===6);
-  for(var fy=0;fy<H;fy++){
-    for(var fx=0;fx<W;fx++){
-      var qx0=-halfW+fx*tw, qx1=qx0+tw;
-      var qz0=-halfH+fy*th, qz1=qz0+th;
-      var chk=((fx+fy)&1)?1.0:0.90;
-      var shf=chk*(0.96+0.06*hash2(fx+7,fy+13));
-      BF.quad(qx0,qz1, qx1,qz1, qx1,qz0, qx0,qz0, 0, shadeHex(PALETTE.floor,shf));
+  function isWall(x,y){ return G(y,x)==='#'&&!STAIR_CUT[x+','+y]; }
+
+  /* ---- 地面：每格一块，棋盘格深浅；教学楼走廊换水磨石 ---- */
+  var fy, fx;
+  for(fy=0;fy<H;fy++) for(fx=0;fx<W;fx++){
+    var fm=TH.floor, fcol=TH.fcol;
+    if(R.host==='teach'&&!isRoof&&fy>=16) fm='fterrazzo';
+    if(R.id==='lab3'&&fx>34&&fy<15){ fcol=0x7a8086; }                 /* 网络中心：防静电地板 */
+    var chk=((fx+fy)&1)?1.0:0.93;
+    var shf=chk*(0.96+0.06*hash2(fx+7,fy+13));
+    var qx0=-halfW+fx*tw, qz0=-halfH+fy*th;
+    K.g(fm).quad(qx0,qz0+th, qx0+tw,qz0+th, qx0+tw,qz0, qx0,qz0, 0, shadeHex(fcol,shf));
+  }
+  /* ---- 吊顶 ---- */
+  if(!isRoof){
+    K.g('ceiling').quadN([-halfW,WALLH,-halfH],[halfW,WALLH,-halfH],[halfW,WALLH,halfH],[-halfW,WALLH,halfH],0,-1,0,TH.ceil);
+  }
+
+  /* ---- 墙：贪心合并成矩形块 ---- */
+  var used={}, x, y;
+  for(y=0;y<H;y++) for(x=0;x<W;x++){
+    if(!isWall(x,y)||used[x+','+y]) continue;
+    var w=1, h=1, ok, k;
+    while(x+w<W&&isWall(x+w,y)&&!used[(x+w)+','+y]) w++;
+    for(;;){
+      if(y+h>=H) break;
+      ok=true;
+      for(k=0;k<w;k++) if(!isWall(x+k,y+h)||used[(x+k)+','+(y+h)]){ ok=false; break; }
+      if(!ok) break;
+      h++;
+    }
+    var a, b;
+    for(b=0;b<h;b++) for(a=0;a<w;a++) used[(x+a)+','+(y+b)]=1;
+    var wcx=CX(x)+(w-1)*tw/2, wcz=CZ(y)+(h-1)*th/2;
+    K.g(TH.wallMat).boxFaces(wcx,WALLH/2,wcz,w*tw,WALLH,h*th,TH.wall,0.94,isRoof?'nsewu':'nsew');
+    if(isRoof) K.box('concrete',wcx,WALLH+0.04,wcz,w*tw+0.08,0.08,h*th+0.08,0xb8b4ac,1.0);   /* 女儿墙压顶 */
+  }
+  /* ---- 墙脚：踢脚线 + 墙裙 + 腰线，只沿露在外面的那一侧，连续的一段合成一根 ---- */
+  if(!isRoof){
+    var DIRS=[[0,-1,'n'],[0,1,'s'],[-1,0,'w'],[1,0,'e']], di;
+    function exposed(xx,yy,d){
+      if(!isWall(xx,yy)) return false;
+      var n=G(yy+d[1],xx+d[0]);
+      return n!==null&&n!=='#'&&n!=='='&&n!=='O'&&n!=='S'&&!STAIR_CUT[(xx+d[0])+','+(yy+d[1])];
+    }
+    function trim(x0,y0,x1,y1,d){             /* x0..x1 / y0..y1 是同一条边上连续的墙格 */
+      var horiz=(d[1]!==0), len=(horiz?(x1-x0+1):(y1-y0+1))*tw;
+      var mx=horiz?(CX(x0)+CX(x1))/2:CX(x0)+d[0]*tw/2, mz=horiz?CZ(y0)+d[1]*th/2:(CZ(y0)+CZ(y1))/2;
+      function band(y,h,dep,col,mat){ if(horiz) K.box(mat,mx,y,mz+d[1]*dep/2,len,h,dep,col,1); else K.box(mat,mx+d[0]*dep/2,y,mz,dep,h,len,col,1); }
+      band(0.06,0.12,0.016,TH.skirt,'plastic');
+      band(0.36,0.48,0.008,TH.low,'plaster');
+      band(0.615,0.04,0.022,TH.rail,'wood');
+    }
+    for(di=0;di<4;di++){
+      var d=DIRS[di];
+      if(d[1]!==0){
+        for(y=0;y<H;y++){ var run=-1; for(x=0;x<=W;x++){ var e=(x<W)&&exposed(x,y,d); if(e&&run<0) run=x; if(!e&&run>=0){ trim(run,y,x-1,y,d); run=-1; } } }
+      }else{
+        for(x=0;x<W;x++){ var run2=-1; for(y=0;y<=H;y++){ var e2=(y<H)&&exposed(x,y,d); if(e2&&run2<0) run2=y; if(!e2&&run2>=0){ trim(x,run2,x,y-1,d); run2=-1; } } }
+      }
     }
   }
-  if(!isRoof){
-    B.quadN([-halfW,WALLH,-halfH],[halfW,WALLH,-halfH],[halfW,WALLH,halfH],[-halfW,WALLH,halfH],0,-1,0,0x252c32);
-  }
-  function CX(c){ return (c+0.5)*tw-halfW; }
-  function CZ(r){ return (r+0.5)*th-halfH; }
 
+  /* ---- 逐格：门、出口、楼梯、家具 ---- */
   for(y=0;y<H;y++){
     for(x=0;x<W;x++){
-      ch=R.grid[y][x]; if(ch===undefined) continue;
+      var ch=R.grid[y][x]; if(ch===undefined||ch==='.'||ch==='#') continue;
       var cx=CX(x), cz=CZ(y);
-      if(ch==='.') continue;
-      if(ch==='O'){
-        /* 外墙上的出口：门框 + 两扇玻璃门 + 门上的安全出口灯（以前这一格什么都不画，墙上就是个洞） */
-        var onB=(y===0||y===H-1||x===0||x===W-1);
-        if(!onB) continue;
-        var vert=(x===0||x===W-1), sgn=(x===0||y===0)?-1:1;
-        var ox=vert?cx+sgn*tw*0.30:cx, oz=vert?cz:cz+sgn*th*0.30;
-        function DP(u,yy,v,su,sy,sv,col,sh){ if(vert) B.box(ox+v,yy,oz+u,sv,sy,su,col,sh); else B.box(ox+u,yy,oz+v,su,sy,sv,col,sh); }
-        B.box(cx,(2.30+WALLH)/2,cz,tw,WALLH-2.30,th,PALETTE.wall,0.94);       /* 门头 */
-        DP(-tw/2+0.04,1.15,0,0.08,2.30,0.16,0x39424a,1.05);
-        DP( tw/2-0.04,1.15,0,0.08,2.30,0.16,0x39424a,1.05);
-        DP(0,2.26,0,tw,0.08,0.16,0x39424a,1.05);
-        DP(-tw*0.24,1.12,0,tw*0.44,2.18,0.04,0x2a3a44,1.0);                  /* 玻璃（暗） */
-        DP( tw*0.24,1.12,0,tw*0.44,2.18,0.04,0x2a3a44,1.0);
-        DP(0,1.12,0,0.05,2.18,0.06,0x39424a,1.0);
-        DP(-0.07,1.05,-sgn*0.05,0.03,0.40,0.03,0xb8c0c2,1.2);               /* 推杆 */
-        DP( 0.07,1.05,-sgn*0.05,0.03,0.40,0.03,0xb8c0c2,1.2);
-        G.box(vert?cx-sgn*0.12:cx, 2.48, vert?cz:cz-sgn*0.12, vert?0.04:0.42, 0.16, vert?0.42:0.04, 0x37c47a, 1.0);   /* 安全出口 */
-        continue;
+      if(ch==='=') { roomDoor(c,x,y,cx,cz); continue; }
+      if(ch==='O') { roomExit(c,x,y,cx,cz); continue; }
+      if(ch==='S') { roomStairs(c,x,y,cx,cz); continue; }
+      if(FURN[ch]) FURN[ch](c,x,y,cx,cz);
+      else furnFallback(c,x,y,cx,cz,ch);
+    }
+  }
+  roomDecor(c,isRoof);
+  return K.build();
+}
+
+/* ---- 门：墙厚 1 米，门洞两侧有门套；门扇在 +z 一侧（走廊那边）；开着的门扇转 90° 贴在门洞边 ---- */
+function roomDoor(c,x,y,cx,cz){
+  var K=c.K, R=c.R;
+  var isOpen=(typeof OPENDOORS!=='undefined')?!!OPENDOORS[S.room+':'+x+':'+y]:false;
+  var l=R.grid[y][x-1], r=R.grid[y][x+1];
+  var horiz=(l==='#'||l==='='||r==='#'||r==='=');
+  K.frame(cx,cz,horiz?0:Math.PI/2);
+  var DTOP=2.10, TH=c.theme;
+  K.g(TH.wallMat).boxFaces(0,(DTOP+WALLH)/2,0,1,WALLH-DTOP,1,TH.wall,0.94,'nsd');                 /* 过梁 */
+  var dbl=(l==='='), dbr=(r==='=');                                                              /* 双开门：只在外侧立门套 */
+  if(!dbl) K.bevel('wood',-0.47,DTOP/2,0,0.06,DTOP,1.0,0x3d474e,1.06,0.01);
+  if(!dbr) K.bevel('wood', 0.47,DTOP/2,0,0.06,DTOP,1.0,0x3d474e,1.06,0.01);
+  K.box('wood',0,DTOP+0.03,0,1.0,0.06,1.0,0x3d474e,1.06);
+  var s;
+  for(s=-1;s<=1;s+=2){                                                                           /* 门套线（两面） */
+    if(!dbl) K.box('wood',-0.53,(DTOP+0.08)/2,s*0.507,0.07,DTOP+0.08,0.014,0x4a545c,1.1);
+    if(!dbr) K.box('wood', 0.53,(DTOP+0.08)/2,s*0.507,0.07,DTOP+0.08,0.014,0x4a545c,1.1);
+    K.box('wood',0,DTOP+0.11,s*0.507,1.13,0.07,0.014,0x4a545c,1.1);
+  }
+  K.box('stone',0,0.01,0,0.94,0.02,1.0,0x5a6268,1.05);                                         /* 门槛 */
+  var hingeX=dbl?0.47:-0.43, sw=dbl?-1:1;                     /* 双开门的右扇铰链在右边 */
+  if(dbr&&!dbl){ hingeX=-0.47; sw=1; }
+  var lw=0.86, lz=0.38, lh=2.04;
+  if(!isOpen){
+    var lx=hingeX+sw*lw/2;
+    K.bevel('wood',lx,lh/2+0.01,lz,lw,lh,0.045,0x222a30,1.0,0.008);                              /* 门扇 */
+    K.box('glass',lx,1.55,lz,0.28,0.42,0.05,0x5a7080,1.0);                                       /* 门上的小窗 */
+    K.box('dark',lx,1.55,lz,0.30,0.44,0.03,0x0a0e10,1.0);
+    K.box('metal',lx,0.15,lz+0.024,lw*0.9,0.22,0.004,0x6a7276,1.1);                              /* 踢脚板 */
+    var hx=hingeX+sw*(lw-0.10);
+    K.cyl('metal',hx,1.0,lz+0.03,0.025,0.025,0.012,8,0x8d9aa2,1.25);
+    K.rod('metal',hx,1.02,lz+0.05,hx-sw*0.12,1.02,lz+0.05,0.01,0.01,5,0x8d9aa2,1.25);           /* 把手 */
+    K.cyl('metal',hx,1.0,lz-0.042,0.025,0.025,0.012,8,0x8d9aa2,1.25);
+    K.rod('metal',hx,1.02,lz-0.06,hx-sw*0.12,1.02,lz-0.06,0.01,0.01,5,0x8d9aa2,1.25);
+  }else{
+    var oz=lz+lw/2;                                                                               /* 转开，贴着门洞 */
+    K.bevel('wood',hingeX+sw*0.03,lh/2+0.01,oz,0.045,lh,lw,0x222a30,1.0,0.008);
+    K.box('glass',hingeX+sw*0.03,1.55,oz,0.05,0.42,0.28,0x5a7080,1.0);
+  }
+  if(R.host==='teach'||R.host==='lab'||R.host==='admin'||R.host==='dormN'||R.host==='dormS'){     /* 门牌 */
+    if(!dbl){ K.box('plastic',-0.1,2.32,0.52,0.36,0.14,0.02,0xe8e4dc,1.05); K.box('dark',-0.1,2.32,0.531,0.26,0.06,0.002,0x2a3a4a,1); }
+  }
+  K.unframe();
+}
+/* ---- 外墙上的出口：门框 + 两扇玻璃门 + 推杠 + 门上的安全出口灯 ---- */
+function roomExit(c,x,y,cx,cz){
+  var K=c.K, R=c.R, W=c.W, H=c.H;
+  var onB=(y===0||y===H-1||x===0||x===W-1);
+  if(!onB) return;
+  var vert=(x===0||x===W-1), sgn=(x===0||y===0)?-1:1;
+  var rot=vert?(sgn>0?Math.PI/2:-Math.PI/2):(sgn>0?0:Math.PI);
+  K.frame(cx,cz,rot);                       /* 局部 +z 朝外 */
+  var TH=c.theme;
+  K.g(TH.wallMat).boxFaces(0,(2.30+WALLH)/2,0,1,WALLH-2.30,1,TH.wall,0.94,'nsd');               /* 门头 */
+  K.bevel('metal',-0.46,1.15,0.30,0.08,2.30,0.16,0x39424a,1.05,0.01);
+  K.bevel('metal', 0.46,1.15,0.30,0.08,2.30,0.16,0x39424a,1.05,0.01);
+  K.bevel('metal',0,2.26,0.30,1.0,0.08,0.16,0x39424a,1.05,0.01);
+  K.box('glass',-0.215,1.12,0.30,0.40,2.12,0.02,0x6a8a9a,1.0);                                  /* 玻璃（能看见外面的天） */
+  K.box('glass', 0.215,1.12,0.30,0.40,2.12,0.02,0x6a8a9a,1.0);
+  K.box('sky',0,1.12,0.36,0.86,2.14,0.004,0xffffff,0.55);
+  K.box('metal',0,1.12,0.30,0.04,2.18,0.05,0x39424a,1.0);
+  K.rod('metal',-0.40,1.02,0.24,-0.04,1.02,0.24,0.016,0.016,6,0xb8c0c2,1.2);                    /* 推杠 */
+  K.rod('metal', 0.04,1.02,0.24, 0.40,1.02,0.24,0.016,0.016,6,0xb8c0c2,1.2);
+  K.box('emit',0,2.48,-0.505,0.42,0.16,0.04,0x37c47a,1.0);                                       /* 安全出口 */
+  K.box('emit',-0.12,2.48,-0.53,0.08,0.10,0.004,0xe8ffe8,1.0);
+  K.box('fconcrete',0,0.01,0.35,1.0,0.02,0.4,0x7a7a72,1.0);
+  K.unframe();
+}
+/* ---- 楼梯：踏步（水磨石 + 防滑条 + 踢面）、两侧栏杆和木扶手、梯井挡墙 ---- */
+function roomStairs(c,x,y,cx,cz){
+  var K=c.K, R=c.R, tw=c.tw, th=c.th;
+  if((x>0&&R.grid[y][x-1]==='S')||(y>0&&R.grid[y-1][x]==='S')) return;   /* 一组只建一次 */
+  var sInfo=stairInfo(R,x,y);
+  var gw=sInfo.gw, gd=sInfo.gd, longX=sInfo.longX;
+  cx=cx+(gw-1)*tw*0.5; cz=cz+(gd-1)*th*0.5;
+  var ax=longX?'z':'x';
+  var dxs=sInfo.dx, dys=sInfo.dy, bestBlock=sInfo.block;
+  var maxRun=(bestBlock===-2)?2.60:1.30;
+  var tread=0.26, rise=0.158;
+  var nR=Math.max(4,Math.min(10,Math.round(maxRun/tread)));
+  var baseOff=-0.5;
+  var wid=(longX?gw:gd)*tw, halfW2=wid*0.5-0.05;
+  var st2, runOff, hgt;
+  function P(off){ return {x:cx+(ax==='x'?dxs*off:0), z:cz+(ax==='z'?dys*off:0)}; }
+  function bx(off,y,along,h,across,col,sh,mat){
+    var p=P(off);
+    K.box(mat||'fterrazzo',p.x,y,p.z, ax==='z'?across:along, h, ax==='z'?along:across, col, sh);
+  }
+  for(st2=0; st2<nR; st2++){
+    runOff=baseOff+st2*tread+tread*0.5; hgt=(st2+1)*rise;
+    bx(runOff,hgt-0.02,tread,0.04,wid,PALETTE.stair,1.04-st2*0.008,'terrazzo');                 /* 踏面 */
+    bx(runOff,(hgt-0.04)/2,tread,Math.max(0.02,hgt-0.04),wid*0.999,0x8a8680,0.95,'concrete');   /* 下面的实心 */
+    bx(runOff-tread*0.44,hgt-0.003,0.05,0.008,wid*0.96,0x5a5e60,1.0,'metal');                     /* 防滑条 */
+    bx(runOff-tread*0.5+0.004,hgt-rise/2,0.008,rise-0.04,wid,0xd8d4cc,1.0,'plaster');            /* 踢面 */
+  }
+  /* 栏杆：每两级一根立杆，顶上一根连续的木扶手 */
+  var s2;
+  for(s2=-1;s2<=1;s2+=2){
+    var pts=[];
+    for(st2=0; st2<nR; st2++){
+      runOff=baseOff+st2*tread+tread*0.5; hgt=(st2+1)*rise;
+      var p=P(runOff), side=s2*halfW2;
+      var px=p.x+(ax==='z'?side:0), pz=p.z+(ax==='x'?side:0);
+      if(st2%2===0) K.rod('metal',px,hgt,pz,px,hgt+0.92,pz,0.016,0.016,5,0x6d7376,1.0);
+      pts.push([px,hgt+0.92,pz]);
+    }
+    if(pts.length>1){
+      var a=pts[0], b=pts[pts.length-1];
+      K.rod('wood',a[0],a[1],a[2],b[0],b[1],b[2],0.03,0.03,6,0x8b3a2e,1.06);
+      K.rod('metal',a[0],a[1]-0.45,a[2],b[0],b[1]-0.45,b[2],0.01,0.01,4,0x6d7376);
+    }
+  }
+  var shaftD=nR*tread, farOff=baseOff+shaftD;
+  bx(farOff+0.06,WALLH*0.5,0.12,WALLH,wid+0.12,0x0d1114,0.75,'dark');                         /* 梯井尽头：黑的 */
+  var midOff=baseOff+shaftD*0.5, mp=P(midOff), TH=c.theme;
+  if(ax==='z'){
+    K.box(TH.wallMat,mp.x-halfW2-0.11,WALLH*0.5,mp.z,0.12,WALLH,shaftD,PALETTE.wall,0.88);
+    K.box(TH.wallMat,mp.x+halfW2+0.11,WALLH*0.5,mp.z,0.12,WALLH,shaftD,PALETTE.wall,0.82);
+  }else{
+    K.box(TH.wallMat,mp.x,WALLH*0.5,mp.z-halfW2-0.11,shaftD,WALLH,0.12,PALETTE.wall,0.88);
+    K.box(TH.wallMat,mp.x,WALLH*0.5,mp.z+halfW2+0.11,shaftD,WALLH,0.12,PALETTE.wall,0.82);
+  }
+  bx(midOff,2.30-0.07,shaftD,0.14,wid+0.14,0x2c3034,0.72,'concrete');                        /* 楼梯下沿的梁 */
+  bx(baseOff-0.06,(2.30+WALLH)*0.5,0.10,WALLH-2.30,wid+0.10,PALETTE.wall,0.90,TH.wallMat);
+  var c0=Math.min(baseOff, farOff), c1=Math.max(baseOff, farOff);
+  var ex0,ex1,ez0,ez1;
+  if(ax==='z'){ ex0=cx-halfW2-0.18; ex1=cx+halfW2+0.18; ez0=cz+Math.min(dys*c0,dys*c1); ez1=cz+Math.max(dys*c0,dys*c1); }
+  else { ez0=cz-halfW2-0.18; ez1=cz+halfW2+0.18; ex0=cx+Math.min(dxs*c0,dxs*c1); ex1=cx+Math.max(dxs*c0,dxs*c1); }
+  R.stairExtra.push({x0:ex0,x1:ex1,z0:ez0,z1:ez1});
+}
+
+/* 一扇嵌在墙里的窗：内侧窗框 + 透进天光的玻璃 + 窗台。nx/nz 是窗朝屋里的方向 */
+function wallWindow(K,x,z,nx,nz,w,y0,y1,mull){
+  var rot=Math.atan2(nx,nz);                    /* 局部 +z 朝屋里 */
+  K.frame(x,z,rot);
+  var h=y1-y0, ym=(y0+y1)/2;
+  K.box('sky',0,ym,0.004,w,h,0.004,0xffffff,0.9);
+  K.box('metal',0,y1+0.03,0.03,w+0.10,0.06,0.06,0x9aa4a8,1.05);
+  K.box('metal',0,y0-0.02,0.07,w+0.16,0.04,0.14,0xd8d4cc,1.0);                             /* 窗台 */
+  K.box('metal',-w/2-0.03,ym,0.03,0.06,h+0.06,0.06,0x9aa4a8,1.05);
+  K.box('metal', w/2+0.03,ym,0.03,0.06,h+0.06,0.06,0x9aa4a8,1.05);
+  var k, n=mull||2;
+  for(k=1;k<n;k++) K.box('metal',-w/2+w*k/n,ym,0.025,0.04,h,0.04,0x9aa4a8,1.05);
+  K.box('metal',0,y0+h*0.62,0.025,w,0.035,0.04,0x9aa4a8,1.05);
+  K.unframe();
+}
+/* 吸顶灯盘：金属框 + 发光面 */
+function ceilingLight(K,x,z,lw,ld,rot){
+  K.frame(x,z,rot||0);
+  K.box('metal',0,WALLH-0.025,0,lw+0.08,0.05,ld+0.08,0x9aa4a8,1.0);
+  K.g('emit').quadN([-lw/2,WALLH-0.052,-ld/2],[lw/2,WALLH-0.052,-ld/2],[lw/2,WALLH-0.052,ld/2],[-lw/2,WALLH-0.052,ld/2],0,-1,0,0xdcecf4);
+  K.unframe();
+}
+
+/* ---- 每种房间自己的布置 ---- */
+function roomDecor(c,isRoof){
+  var K=c.K, R=c.R, W=c.W, H=c.H, tw=c.tw, th=c.th, halfW=c.halfW, halfH=c.halfH, CX=c.CX, CZ=c.CZ, i, x;
+  var teachFl=(R.host==='teach'&&R.floor>=1&&R.floor<=5);
+
+  /* 外墙上的窗（教学楼教室前墙是黑板，走廊外墙是宣传栏，不开） */
+  var winHosts={admin:1,lab:1,dormN:1,dormS:1,canteen:1,guard:1};
+  if(winHosts[R.host]||R.id==='gear1'){
+    var rr, side;
+    for(side=0;side<2;side++){
+      rr=side?H-1:0;
+      var inner=side?H-2:1, nz=side?-1:1;
+      for(x=2;x<W-2;x+=3){
+        if(R.grid[rr][x]!=='#'||R.grid[rr][x-1]!=='#'||R.grid[rr][x+1]!=='#') continue;
+        var ic=R.grid[inner][x];
+        if(ic==='#'||ic==='S'||R.grid[inner][x-1]==='#'||R.grid[inner][x+1]==='#') continue;
+        if(R.grid[inner][x]==='O') continue;
+        wallWindow(K,CX(x),CZ(rr)+nz*th*0.5,0,nz,1.5,1.0,2.25,2);
       }
-      if(ch==='U'){                     /* 钟楼的铜钟：吊在横梁上 */
-        B.box(cx,2.82,cz,tw*2.6,0.18,0.22,0x3a2a1c,1.0);
-        B.box(cx,2.60,cz,0.10,0.30,0.10,0x2a2018,1.0);
-        var bl0;
-        for(bl0=0;bl0<6;bl0++){
-          var bw0=0.62+bl0*0.13, by0=2.36-bl0*0.17;
-          B.box(cx,by0,cz,bw0,0.18,bw0,bl0%2?0x6e5228:0x7c5c2c,1.0+bl0*0.03);
-        }
-        B.box(cx,1.38,cz,1.40,0.08,1.40,0x5a4220,0.95);                    /* 钟口 */
-        B.box(cx,1.32,cz,0.16,0.20,0.16,0x2a2018,1.0);                     /* 钟舌 */
-        B.box(cx+0.9,1.9,cz,1.1,0.12,0.12,0x5a4632,1.0);                    /* 撞木 */
-        BF.aoPatch(cx,cz,1.5,1.5,0.8);
-        solidM(cx,cz,1.3,1.3);
-        continue;
-      }
-      if(ch==='A'){                     /* 供桌：香炉、白蜡烛、一碗插着筷子的饭 */
-        BF.aoPatch(cx,cz,1.3,0.8,0.9);
-        B.box(cx,0.80,cz,1.30,0.06,0.70,0x5a2a20,1.05);
-        B.box(cx,0.40,cz,1.20,0.78,0.60,0x4a2018,0.95);
-        B.box(cx,0.40,cz+0.31,1.10,0.70,0.02,0x8a2a22,1.0);
-        B.box(cx,0.90,cz-0.10,0.24,0.14,0.24,0x6a5a3a,1.1);                 /* 香炉 */
-        B.box(cx-0.03,1.05,cz-0.10,0.01,0.22,0.01,0x9a7a4a,1.0);
-        B.box(cx+0.03,1.04,cz-0.10,0.01,0.20,0.01,0x9a7a4a,1.0);
-        B.box(cx-0.45,0.98,cz,0.05,0.30,0.05,0xf0e8d8,1.1);                 /* 蜡烛 */
-        B.box(cx+0.45,0.98,cz,0.05,0.30,0.05,0xf0e8d8,1.1);
-        G.box(cx-0.45,1.16,cz,0.03,0.05,0.03,0xffc860,1.0);
-        G.box(cx+0.45,1.16,cz,0.03,0.05,0.03,0xffc860,1.0);
-        B.box(cx+0.2,0.88,cz+0.12,0.16,0.08,0.16,0xe8e2d4,1.1);             /* 饭碗 */
-        B.box(cx+0.2,0.98,cz+0.12,0.012,0.18,0.012,0x3a2a1a,1.0);           /* 筷子竖着 */
-        B.box(cx+0.22,0.98,cz+0.12,0.012,0.18,0.012,0x3a2a1a,1.0);
-        B.box(cx-0.18,0.85,cz+0.15,0.14,0.02,0.20,0xd8d4c6,1.0);            /* 一张照片 */
-        solidM(cx,cz,1.3,0.7);
-        continue;
-      }
-      if(ch==='#'){
-        if(STAIR_CUT[x+','+y]) continue;          /* 这一格让给楼梯井 */
-        B.box(cx,WALLH/2,cz,tw,WALLH,th,PALETTE.wall,0.94);
-        if(!isRoof){
-          B.box(cx,0.075,cz,tw+0.03,0.15,th+0.03,0x242c32,1.05);
-          B.box(cx,0.36,cz,tw+0.012,0.42,th+0.012,0x8b867e,0.97);
-        }
-        continue;
-      }
-      if(ch==='='){
-        var isOpen=(typeof OPENDOORS!=='undefined')?!!OPENDOORS[S.room+':'+x+':'+y]:false;
-        var DTOP=2.10;
-        B.box(cx,(DTOP+WALLH)/2,cz,tw,WALLH-DTOP,th,PALETTE.wall,0.94);   /* 过梁 2.10→3.00 */
-        var fw=0.09;
-        B.box(cx-tw/2+fw/2,DTOP/2,cz+th*0.30,fw,DTOP,th*0.72,0x3d474e,1.06);
-        B.box(cx+tw/2-fw/2,DTOP/2,cz+th*0.30,fw,DTOP,th*0.72,0x3d474e,1.06);
-        B.box(cx,DTOP+fw/2,cz+th*0.30,tw,fw,th*0.72,0x3d474e,1.06);
-        if(!isOpen){
-        B.box(cx,DTOP/2-0.01,cz+th*0.16,tw*0.90-0.16,DTOP-0.06,0.055,0x222a30,1.0);
-        B.box(cx,DTOP/2-0.01,cz+th*0.22,tw*0.90-0.26,DTOP-0.24,0.012,0x161d23,1.0);
-        B.box(cx+tw*0.30,1.02,cz+th*0.30,0.10,0.055,0.055,0x8d9aa2,1.25);   /* 把手 */
-        B.box(cx+tw*0.30,1.02,cz+th*0.36,0.035,0.035,0.10,0x8d9aa2,1.25);
-        B.box(cx,0.015,cz+th*0.20,tw*0.94,0.03,th*0.60,0x2a3339,1.08);
-        }
-        continue;
-      }
-      if(ch==='S'){
-        if((x>0&&R.grid[y][x-1]==='S')||(y>0&&R.grid[y-1][x]==='S')) continue;  /* 一组只建一次 */
-        var sInfo=stairInfo(R,x,y);
-        var gw=sInfo.gw, gd=sInfo.gd, longX=sInfo.longX;
-        cx=cx+(gw-1)*tw*0.5; cz=cz+(gd-1)*th*0.5;
-        var ax=longX?'z':'x';                     /* 梯段沿另一条轴往上走 */
-        var dxs=sInfo.dx, dys=sInfo.dy, bestBlock=sInfo.block;
-        var maxRun=(bestBlock===-2)?2.60:1.30;
-        var tread=0.26, rise=0.158;
-        var nR=Math.max(4,Math.min(10,Math.round(maxRun/tread)));
-        var totalRun=nR*tread, totalRise=nR*rise;
-        var baseOff=-0.5;
-        var wid=(longX?gw:gd)*tw;                       /* 梯段宽：整组格子 */
-        var halfW2=wid*0.5-0.05;
-        var st2, runOff, hgt, stepZ, stepX, szX, szZ;
-        var sx2=ax==='z'?wid:tread, sz2=ax==='z'?tread:wid;
-        for(st2=0; st2<nR; st2++){
-          runOff=baseOff+st2*tread+tread*0.5;
-          hgt=(st2+1)*rise;
-          stepZ=cz+(ax==='z'?dys*runOff:0);
-          stepX=cx+(ax==='x'?dxs*runOff:0);
-          B.box(stepX, hgt*0.5, stepZ, sx2, hgt, sz2, PALETTE.stair, 1.04-st2*0.008);
-          var noseZ=stepZ-(ax==='z'?dys*tread*0.42:0);
-          var noseX=stepX-(ax==='x'?dxs*tread*0.42:0);
-          B.box(noseX, hgt-0.012, noseZ, ax==='z'?wid:0.06, 0.024, ax==='z'?0.06:wid, 0xc9c5bb, 1.16);
-          B.box(stepX-(ax==='x'?dxs*tread*0.5:0), hgt*0.5-0.01, stepZ-(ax==='z'?dys*tread*0.5:0),
-                ax==='z'?wid:0.014, Math.max(0.02,hgt-0.02), ax==='z'?0.014:wid, 0x5a5e60, 0.82);
-        }
-        for(st2=0; st2<nR; st2++){
-          runOff=baseOff+st2*tread+tread*0.5; hgt=(st2+1)*rise+0.92;
-          var rz=cz+(ax==='z'?dys*runOff:0), rx=cx+(ax==='x'?dxs*runOff:0);
-          B.box(rx-halfW2, hgt, rz, 0.055, 0.055, ax==='z'?tread*1.18:0.055, 0x8b3a2e, 1.06);
-          B.box(rx+halfW2, hgt, rz, 0.055, 0.055, ax==='z'?tread*1.18:0.055, 0x8b3a2e, 1.06);
-          if(st2%2===0){
-            B.box(rx-halfW2, hgt-0.46, rz, 0.04, 0.92, 0.04, 0x6d7376, 1.0);
-            B.box(rx+halfW2, hgt-0.46, rz, 0.04, 0.92, 0.04, 0x6d7376, 1.0);
-          }
-        }
-        var shaftD=totalRun, farOff=baseOff+shaftD;
-        var bz=cz+(ax==='z'?dys*(farOff+0.06):0), bx=cx+(ax==='x'?dxs*(farOff+0.06):0);
-        B.box(bx, WALLH*0.5, bz,
-              ax==='z'?wid+0.12:0.12, WALLH, ax==='z'?0.12:wid+0.12, 0x0d1114, 0.75);
-        var midOff=baseOff+shaftD*0.5;
-        var sz4=cz+(ax==='z'?dys*midOff:0), sx4=cx+(ax==='x'?dxs*midOff:0);
-        B.box(sx4-halfW2-0.05, WALLH*0.5, sz4,
-              ax==='z'?0.12:shaftD, WALLH, ax==='z'?shaftD:0.12, PALETTE.wall, 0.88);
-        B.box(sx4+halfW2+0.05, WALLH*0.5, sz4,
-              ax==='z'?0.12:shaftD, WALLH, ax==='z'?shaftD:0.12, PALETTE.wall, 0.82);
-        B.box(sx4, 2.30-0.07, sz4,
-              ax==='z'?wid+0.14:shaftD, 0.14, ax==='z'?shaftD:wid+0.14, 0x2c3034, 0.72);
-        var lz=cz+(ax==='z'?dys*(baseOff-0.06):0), lx=cx+(ax==='x'?dxs*(baseOff-0.06):0);
-        B.box(lx, (2.30+WALLH)*0.5, lz,
-              ax==='z'?wid+0.10:0.10, WALLH-2.30, ax==='z'?0.10:wid+0.10, PALETTE.wall, 0.90);
-        var c0=Math.min(baseOff, farOff), c1=Math.max(baseOff, farOff);
-        var ex0,ex1,ez0,ez1;
-        if(ax==='z'){ ex0=cx-halfW2-0.18; ex1=cx+halfW2+0.18;
-          ez0=cz+Math.min(dys*c0,dys*c1); ez1=cz+Math.max(dys*c0,dys*c1); }
-        else { ez0=cz-halfW2-0.18; ez1=cz+halfW2+0.18;
-          ex0=cx+Math.min(dxs*c0,dxs*c1); ex1=cx+Math.max(dxs*c0,dxs*c1); }
-        if(!R.stairExtra) R.stairExtra=[];
-        R.stairExtra.push({x0:ex0,x1:ex1,z0:ez0,z1:ez1});
-        continue;
-      }
-      if(ch==='d'){
-        if(R.host==='admin'){
-          B.box(cx,0.73,cz+th*0.30,tw*0.98,1.45,0.07,0x9aa4a8,1.02);
-          B.box(cx,1.46,cz+th*0.30,tw*1.00,0.05,0.10,0xb8c0c2,1.08);
-          B.box(cx,1.02,cz-th*0.12,tw*0.46,0.32,0.05,0x1d262b,1.0);
-          B.box(cx,1.02,cz-th*0.09,tw*0.42,0.26,0.02,0x7fb0c8,1.25);
-          B.box(cx,0.88,cz-th*0.12,tw*0.10,0.14,0.10,0x39434a,1.0);
-          B.box(cx,0.77,cz+th*0.06,tw*0.34,0.02,0.12,0x2a3238,1.0);
-          B.box(cx+tw*0.30,0.82,cz-th*0.04,tw*0.20,0.10,th*0.24,0xd8d4c6,1.05);
-          B.box(cx,0.46,cz-th*0.42,tw*0.42,0.08,th*0.36,0x2e3438,1.0);
-          B.box(cx,0.80,cz-th*0.58,tw*0.40,0.52,0.07,0x2e3438,1.02);
-          B.box(cx,0.22,cz-th*0.42,0.06,0.40,0.06,0x1d2226,1.0);
-          B.box(cx+tw*0.46,0.90,cz,0.34,1.80,th*0.86,0x6e7a80,1.02);
-          B.box(cx+tw*0.46,1.82,cz,0.38,0.05,th*0.88,0x9aa4a8,1.08);
-          B.box(cx+tw*0.46,1.20,cz-th*0.44,0.36,0.03,0.02,0xb8c0c2,1.0);
-          B.box(cx+tw*0.46,0.60,cz-th*0.44,0.36,0.03,0.02,0xb8c0c2,1.0);
-          var adw=tw*0.86, add=th*0.64, adh=0.74, adz=cz-0.06;
-          B.box(cx,adh,adz,adw,0.05,add,PALETTE.desk,1.06);                 /* 桌面 */
-          B.box(cx,adh-0.05,adz,adw*0.98,0.06,add*0.98,0x4a3a28,0.90);      /* 桌沿暗部 */
-          B.box(cx,adh-0.24,adz+add*0.42,adw*0.92,0.34,0.03,0x6a4c30,0.92); /* 挡板（朝过道） */
-          B.box(cx-adw*0.30,adh-0.20,adz-add*0.24,0.30,0.40,0.28,0x8b867e,0.95); /* 抽屉柜 */
-          B.box(cx-adw*0.30,adh-0.10,adz-add*0.24,0.26,0.02,0.30,0x9aa4a8,1.05);
-          B.rimTop(cx,adh,adz,adw,0.05,add,0xd8c7a4,1.0,0.014);
-          BF.aoPatch(cx,cz,tw*0.98,th*0.90,0.9);
-          R.stats.cubicle++;
-          continue;
-        }
-        R.stats.desk++;
-        var dw=tw*0.78, dd=th*0.52, dh=0.74;
-        var dz=cz-0.10;
-        B.box(cx,dh,dz,dw,0.05,dd,PALETTE.desk,1.06);                 /* 桌面 */
-        B.box(cx,dh-0.05,dz,dw*0.96,0.05,dd*0.96,0x2e2a24,0.92);      /* 桌斗暗部 */
-        B.box(cx-dw/2+0.035,dh/2-0.04,dz,0.04,dh-0.09,dd*0.86,PALETTE.desk,0.80);
-        B.box(cx+dw/2-0.035,dh/2-0.04,dz,0.04,dh-0.09,dd*0.86,PALETTE.desk,0.80);
-        B.box(cx,dh-0.20,dz-dd/2+0.03,dw*0.9,0.28,0.03,PALETTE.desk,0.88);
-        var hh=hash2(i*3+7, (x||0)*5+11);
-        if(hh>0.42){
-          B.box(cx+(hh-0.7)*0.18, dh+0.028, dz-0.03, 0.26, 0.012, 0.19, 0xb9c0b8, 1.0);
-          B.box(cx+(hh-0.7)*0.18, dh+0.036, dz-0.03, 0.25, 0.006, 0.18, 0xe6ece6, 1.0);
-        }
-        var chz=cz+0.30;
-        R.stats.chair++;
-        B.box(cx,0.44,chz,tw*0.44,0.045,0.38,PALETTE.seat,1.12);
-        B.box(cx,0.70,chz+0.21,tw*0.44,0.48,0.045,PALETTE.seat,1.0);
-        B.box(cx,0.21,chz,tw*0.40,0.42,0.05,PALETTE.seat,0.70);
-        BF.aoPatch(cx,cz,tw*0.96,th*0.70,1.0);
-        B.rimTop(cx,0.74,cz,tw*0.90,0.05,th*0.60,0xd8c7a4,1.0,0.016);
-        B.box(cx,0.738,cz,tw*0.92+0.018,0.014,th*0.62+0.018,0x4e3722,0.80);
-        continue;
-      }
-      if(ch==='P'){
-        if(R.stats) R.stats.seat++;
-        B.box(cx,0.46,cz,tw*0.56,0.05,th*0.52,PALETTE.seat,1.1);
-        B.box(cx,0.72,cz+th*0.24,tw*0.56,0.52,0.05,PALETTE.seat,1.0);
-        B.box(cx,0.23,cz,tw*0.07,0.46,th*0.07,PALETTE.seat,0.75);
-        continue;
-      }
-      if(ch==='T'){
-        B.rimTop(cx,1.0,cz,tw*0.92,0.06,th*0.86,0xe0d6bc,1.0,0.018);
-        BF.aoPatch(cx,cz,tw*0.9,th*0.8,0.9);
-        B.box(cx,0.46,cz,tw*0.72,0.92,th*0.66,PALETTE.podium,1.0);
-        B.box(cx,0.96,cz,tw*0.80,0.07,th*0.74,PALETTE.podium,1.12);
-        continue;
-      }
-      if(ch==='V'){                     /* 车位上的车（尺寸按真实车长放大约 2.6 倍） */
-        BF.aoPatch(cx,cz,tw*3.9,th*2.4,1.0);
-        solidM(cx,cz,tw*3.70,th*1.85);   /* 以前碰撞只有一格的 0.82，人能直接走进车身里 */
-        B.box(cx,0.80,cz,tw*3.70,1.35,th*1.85,0x39424a,1.02);
-        B.box(cx,1.55,cz-th*0.08,tw*2.10,1.00,th*1.50,0x424c55,1.05);
-        B.box(cx,1.58,cz+th*0.52,tw*1.95,0.72,0.12,0x18222c,1.20);
-        B.box(cx,1.58,cz-th*0.60,tw*1.95,0.64,0.12,0x18222c,1.10);
-        var wl, wxs=[-1,1], wzs=[-1,1];
-        for(wl=0;wl<4;wl++){
-          B.box(cx+wxs[wl&1]*tw*0.88,0.38,cz+wzs[(wl>>1)&1]*th*0.50,
-                0.50,1.10,0.90,0x0e1216,1.0);
-        }
-        continue;
-      }
-      if(ch==='b'){
-        var bdir;
-        if(R.grid[y-1]&&R.grid[y-1][x]==='#') bdir=1;
-        else if(R.grid[y+1]&&R.grid[y+1][x]==='#') bdir=-1;
-        else bdir=(cz<0)?1:-1;
-        var bw = tw*0.92, bl = th*1.62, bcz = cz + bdir*(bl-th)*0.5;
-        BF.aoPatch(cx,bcz,bw*0.98,bl*0.98,0.9);
-        solidM(cx,bcz,bw*0.94,bl);
-        B.box(cx,0.18,bcz,bw*0.94,0.36,bl,0x5a4632,1.0);          /* 床架 */
-        B.box(cx,0.42,bcz,bw*0.90,0.14,bl*0.96,0xd8d4c8,1.05);    /* 床垫 */
-        B.box(cx,0.53,bcz-bdir*bl*0.34,bw*0.66,0.12,bl*0.20,0xe8e4d8,1.1); /* 枕头 */
-        B.box(cx,0.51,bcz+bdir*bl*0.10,bw*0.88,0.12,bl*0.52,0x7a8a96,1.02);/* 被子 */
-        B.box(cx-bw*0.48,0.55,cz-bdir*bl*0.42,0.07,1.10,0.07,0x4a3a2a,1.0); /* 床头柱 */
-        B.box(cx+bw*0.48,0.55,cz-bdir*bl*0.42,0.07,1.10,0.07,0x4a3a2a,1.0);
-        continue; }
-      if(ch==='q'){                     /* 实验台：台面 + 柜体 + 试剂架 */
-        B.box(cx,0.90,cz,tw*0.92,0.06,th*0.78,0x4c5a60,1.25);
-        B.box(cx,0.44,cz,tw*0.86,0.88,th*0.70,0x7d878c,1.05);
-        B.box(cx,1.22,cz-th*0.28,tw*0.86,0.06,0.10,0x55605f,1.0);
-        continue;
-      }
-      if(ch==='n'){                     /* 学生机：桌 + 显示器 + 座椅 */
-        B.box(cx,0.74,cz,tw*0.88,0.05,th*0.62,PALETTE.desk,1.05);
-        B.box(cx-0.22,0.37,cz,0.05,0.74,th*0.55,PALETTE.desk,0.82);
-        B.box(cx+0.22,0.37,cz,0.05,0.74,th*0.55,PALETTE.desk,0.82);
-        B.box(cx,1.08,cz-0.12,tw*0.46,0.34,0.05,0x1d262b,1.0);
-        B.box(cx,1.08,cz-0.09,tw*0.42,0.28,0.02,0x7fb0c8,1.25);
-        B.box(cx,0.82,cz-0.12,tw*0.10,0.14,0.10,0x39434a,1.0);
-        B.box(cx+0.18,0.76,cz+0.06,0.16,0.02,0.10,0x2a3036,1.0);           /* 键盘旁的鼠标 */
-        B.box(cx,0.45,cz+0.42,0.40,0.05,0.38,0x2e3438,1.0);                 /* 椅子 */
-        B.box(cx,0.72,cz+0.60,0.40,0.46,0.05,0x2e3438,1.0);
-        B.box(cx,0.22,cz+0.42,0.05,0.44,0.05,0x1d2226,1.0);
-        continue;
-      }
-      if(ch==='x'){                     /* 地图/挂图架 */
-        B.box(cx,1.20,cz,tw*0.86,1.30,0.06,0xb9bcae,1.0);
-        B.box(cx,1.20,cz-0.04,tw*0.80,1.20,0.02,0x8e9a8c,1.0);
-        B.box(cx,0.30,cz,0.08,0.60,0.08,0x4a5450,1.0);
-        continue;
-      }
-      if(ch==='p'){
-        if(S.__pianoPlaced){
-          B.box(cx,0.22,cz,tw*0.40,0.44,th*0.40,0x5a4a36,0.95);
-          B.box(cx,0.46,cz,tw*0.42,0.05,th*0.42,0x6a5842,1.05);
-          continue;
-        }
-        S.__pianoPlaced=1;
-        var pAx='z', pn=-1;                    /* pn = 墙在哪一侧 */
-        if(R.grid[y-1]&&R.grid[y-1][x]==='#'){ pAx='z'; pn=-1; }
-        else if(R.grid[y+1]&&R.grid[y+1][x]==='#'){ pAx='z'; pn=1; }
-        else if(R.grid[y]&&R.grid[y][x-1]==='#'){ pAx='x'; pn=-1; }
-        else if(R.grid[y]&&R.grid[y][x+1]==='#'){ pAx='x'; pn=1; }
-        function PB(a,b,y,sx,sy,sz,col,sh){
-          if(pAx==='z') B.box(cx+a,y,cz+pn*b,sx,sy,sz,col,sh);
-          else B.box(cx+pn*b,y,cz+a,sz,sy,sx,col,sh);
-        }
-        var pD=0.62;                           /* 琴体进深 */
-        BF.aoPatch(cx,cz,1.5,1.0,0.85);
-        if(pAx==='z') solidM(cx,cz+pn*(0.5-pD*0.5),1.48,pD+0.04); else solidM(cx+pn*(0.5-pD*0.5),cz,pD+0.04,1.48);
-        var bBack=0.5-pD*0.5;                  /* 琴体中心（贴墙） */
-        var bFront=-0.12;                      /* 琴体前沿 */
-        PB(0, bBack, 0.60, 1.44, 1.20, pD, 0x23282b, 1.0);             /* 琴体 */
-        PB(0, bBack, 1.22, 1.46, 0.05, pD+0.02, 0x2e3539, 1.06);       /* 顶盖 */
-        PB(0, bFront-0.11, 0.72, 1.34, 0.08, 0.22, 0x14181a, 1.0);     /* 键盘托 */
-        PB(0, bFront-0.09, 0.765, 1.26, 0.025, 0.13, 0xe8e4d8, 1.12);  /* 白键 */
-        var bk;
-        for(bk=0;bk<6;bk++){                                            /* 黑键 */
-          var kbx=(bk<2)?(-0.30+bk*0.13):(-0.02+(bk-2)*0.13);
-          PB(kbx, bFront-0.055, 0.783, 0.06, 0.02, 0.075, 0x101314, 0.9);
-        }
-        PB(0, bFront-0.03, 1.20, 0.92, 0.34, 0.035, 0x1a1f22, 1.02);   /* 谱架 */
-        PB(-0.12, bFront-0.06, 0.13, 0.07, 0.05, 0.11, 0xa8913f, 1.25);/* 踏板 */
-        PB(0.12, bFront-0.06, 0.13, 0.07, 0.05, 0.11, 0xa8913f, 1.25);
-        PB(0, bFront-0.56, 0.46, 0.86, 0.06, 0.30, 0x5a4a36, 1.0);     /* 琴凳 */
-        PB(0, bFront-0.56, 0.22, 0.80, 0.44, 0.28, 0x4a3c2c, 0.85);
-        continue;
-      }
-      if(ch==='K'){
-        if(R.host==='admin'){
-          var adw=tw*1.15, add=th*0.86;
-          BF.aoPatch(cx,cz,adw*1.02,add*1.02,0.9);
-          solidM(cx,cz,adw,add);
-          B.box(cx,0.72,cz,adw,0.06,add,0x7a5a38,1.08);                /* 桌面 */
-          B.box(cx,0.375,cz,adw*0.96,0.69,add*0.92,0x6a4c30,0.93);     /* 桌身 */
-          B.box(cx,0.40,cz-add*0.30,adw*0.92,0.55,0.03,0x53401f,0.86); /* 挡板 */
-          B.box(cx-adw*0.34,0.40,cz+add*0.30,0.36,0.56,0.03,0x8b867e,0.95); /* 抽屉 */
-          B.box(cx-adw*0.34,0.48,cz+add*0.32,0.20,0.02,0.02,0xb8a060,1.1);
-          B.box(cx-adw*0.34,0.30,cz+add*0.32,0.20,0.02,0.02,0xb8a060,1.1);
-          B.box(cx+adw*0.16,0.755,cz-add*0.10,0.30,0.035,0.22,0xd8d4c6,1.05);
-          B.box(cx+adw*0.16,0.775,cz-add*0.10,0.28,0.008,0.20,0xeceee8,1.0);
-          B.box(cx+adw*0.02,0.80,cz-add*0.24,0.09,0.14,0.09,0x3a3025,1.05);
-          B.box(cx-adw*0.06,1.10,cz-add*0.18,tw*0.44,0.30,0.05,0x1d262b,1.0);
-          B.box(cx-adw*0.06,1.10,cz-add*0.15,tw*0.40,0.25,0.02,0x8fb8c8,1.2);
-          B.box(cx-adw*0.06,0.94,cz-add*0.18,0.09,0.14,0.09,0x39434a,1.0);
-          B.box(cx,0.47,cz+add*0.70,0.46,0.09,0.40,0x2e3438,1.0);
-          B.box(cx,0.78,cz+add*0.88,0.44,0.56,0.07,0x2e3438,1.02);
-          B.box(cx,0.24,cz+add*0.70,0.06,0.42,0.06,0x1d2226,1.0);
-        }else{
-          var lw=tw*1.30, ld=th*0.82;
-          BF.aoPatch(cx,cz,lw*1.02,ld*1.02,0.9);
-          solidM(cx,cz,lw,ld);
-          B.box(cx,0.90,cz,lw,0.07,ld,0x333d3b,1.16);                  /* 台面 */
-          B.box(cx,0.44,cz,lw*0.94,0.87,ld*0.90,0x7d878c,1.0);         /* 柜体 */
-          B.box(cx,0.44,cz+ld*0.46,lw*0.90,0.80,0.03,0x6b757a,1.0);    /* 柜门朝走廊，不是朝墙 */
-          B.box(cx-lw*0.20,0.44,cz+ld*0.49,lw*0.30,0.02,0.02,0x9aa4a8,1.1);
-          B.box(cx+lw*0.20,0.44,cz+ld*0.49,lw*0.30,0.02,0.02,0x9aa4a8,1.1);
-          B.box(cx,1.34,cz-ld*0.34,lw*0.90,0.06,0.12,0x55605f,1.0);    /* 试剂架 */
-          B.box(cx-lw*0.24,1.44,cz-ld*0.34,0.09,0.18,0.09,0x8ab8a0,1.15);
-          B.box(cx-lw*0.06,1.42,cz-ld*0.34,0.08,0.14,0.08,0xc8a24a,1.15);
-          B.box(cx+lw*0.12,1.45,cz-ld*0.34,0.08,0.20,0.08,0x9fb0c8,1.15);
-          B.box(cx+lw*0.28,1.43,cz-ld*0.34,0.07,0.16,0.07,0xbc8a8a,1.15);
-          B.box(cx+lw*0.24,0.90,cz+ld*0.10,tw*0.30,0.02,th*0.24,0x2a3230,1.0);
-          B.box(cx+lw*0.24,0.90,cz+ld*0.10,tw*0.24,0.015,th*0.18,0x161d1c,0.9);
-          B.box(cx+lw*0.24,1.06,cz-0.06,0.035,0.32,0.035,0xb8bdb8,1.2);
-          B.box(cx+lw*0.24,1.22,cz+0.04,0.035,0.035,0.16,0xb8bdb8,1.2);
-          B.box(cx-lw*0.22,0.95,cz+ld*0.08,0.14,0.10,0.14,0x9aa4a8,1.05); /* 烧杯 */
-          B.box(cx-lw*0.22,0.985,cz+ld*0.08,0.10,0.04,0.10,0x9fd0b8,1.25);
-        }
-        continue;
-      }
-      if(ch==='C'){                     /* 离心机 */
-        BF.aoPatch(cx,cz,tw*0.92,th*0.92,0.9);
-        B.box(cx,0.30,cz,tw*0.78,0.60,th*0.78,0x8a9298,1.02);
-        B.box(cx,0.63,cz,tw*0.82,0.07,th*0.82,0xb4bcc0,1.10);
-        B.box(cx,0.68,cz,tw*0.44,0.05,th*0.44,0x2b3237,1.0);            /* 盖子 */
-        B.box(cx,0.70,cz,tw*0.12,0.02,th*0.12,0x7fd0a8,1.8);            /* 指示灯 */
-        B.box(cx,0.40,cz-th*0.40,tw*0.36,0.22,0.03,0x1b2226,1.0);       /* 控制面板 */
-        B.box(cx-tw*0.09,0.43,cz-th*0.41,0.05,0.05,0.02,0xc85a4a,1.3);
-        continue;
-      }
-      if(ch==='N'){                     /* 显微镜 */
-        BF.aoPatch(cx,cz,tw*0.8,th*0.8,0.85);
-        B.box(cx,0.38,cz,tw*0.66,0.76,th*0.62,0x6e7a80,1.0);            /* 台体 */
-        B.box(cx,0.78,cz,tw*0.70,0.04,th*0.66,0x9aa4a8,1.12);           /* 台面 */
-        B.box(cx,0.94,cz-th*0.10,0.10,0.28,0.10,0x2b3237,1.05);         /* 立柱 */
-        B.box(cx,1.10,cz-th*0.02,0.22,0.05,0.16,0x33383c,1.1);          /* 镜臂 */
-        B.box(cx,1.16,cz+th*0.04,0.07,0.14,0.07,0x1f262a,1.1);          /* 目镜 */
-        B.box(cx,1.11,cz-th*0.02,0.05,0.09,0.05,0x1f262a,1.1);
-        B.box(cx,1.01,cz+th*0.06,0.18,0.02,0.14,0x3a4247,1.15);         /* 载物台 */
-        B.box(cx,1.03,cz+th*0.06,0.06,0.01,0.05,0xb8c8c0,1.3);          /* 玻片 */
-        B.box(cx,0.93,cz+th*0.06,0.05,0.05,0.05,0xffe9b0,1.9);          /* 反光镜/光源 */
-        continue;
-      }
-      if(ch==='Z'){                     /* 物理装置：杠杆 + 支架 */
-        BF.aoPatch(cx,cz,tw*0.95,th*0.95,0.9);
-        B.box(cx,0.06,cz,tw*0.80,0.12,th*0.72,0x4a5450,1.0);            /* 底座 */
-        B.box(cx,0.52,cz-th*0.06,0.07,0.92,0.07,0x8a9298,1.05);         /* 立柱 */
-        B.box(cx,0.98,cz-th*0.06,tw*0.86,0.05,0.09,0xb8c0c2,1.15);      /* 横梁 */
-        B.box(cx-tw*0.40,0.86,cz-th*0.06,0.02,0.22,0.02,0x8a9298,1.0);  /* 吊盘线 */
-        B.box(cx+tw*0.40,0.86,cz-th*0.06,0.02,0.22,0.02,0x8a9298,1.0);
-        B.box(cx-tw*0.40,0.74,cz-th*0.06,0.20,0.03,0.20,0xa8b0a8,1.1);  /* 盘 */
-        B.box(cx+tw*0.40,0.74,cz-th*0.06,0.20,0.03,0.20,0xa8b0a8,1.1);
-        B.box(cx+tw*0.40,0.79,cz-th*0.06,0.10,0.08,0.10,0x8a7a52,1.15); /* 砝码 */
-        continue;
-      }
-      if(ch==='Y'){                     /* 地球仪 */
-        BF.aoPatch(cx,cz,tw*0.8,th*0.8,0.85);
-        B.box(cx,0.04,cz,tw*0.40,0.08,th*0.40,0x4a3c2c,1.0);            /* 底座 */
-        B.box(cx,0.46,cz,0.05,0.84,0.05,0x8a7a52,1.05);                 /* 立杆 */
-        B.box(cx,0.92,cz,0.46,0.46,0.46,0x2f5f7a,1.05);                 /* 球体（低多边形方块近似） */
-        B.box(cx,0.92,cz,0.48,0.16,0.48,0x3d7a63,1.05);                 /* 赤道/陆地色带 */
-        B.box(cx+0.12,1.02,cz+0.12,0.12,0.10,0.12,0x6b8f4a,1.15);
-        B.box(cx-0.10,0.84,cz-0.08,0.14,0.08,0.12,0x6b8f4a,1.1);
-        B.box(cx,1.16,cz,0.10,0.04,0.10,0xa8913f,1.2);                  /* 轴帽 */
-        continue;
-      }
-      if(ch==='t'||ch==='k'){ B.box(cx,0.74,cz,tw*0.86,0.06,th*0.8,PALETTE.table,1.06); B.box(cx,0.36,cz,tw*0.8,0.7,th*0.74,PALETTE.table,0.86); continue; }
-      if(ch==='f'){
-        B.aoPatch(cx,cz,tw*0.9,th*0.8,0.85);
-        B.box(cx,1.05,cz,tw*0.74,2.10,th*0.78,0x2b2f33,1.02);   /* 机柜本身是深灰，暗红来自灯 */
-        B.box(cx,2.15,cz,tw*0.78,0.06,th*0.82,0x1a1d20,1.0);
-        B.box(cx,0.10,cz,tw*0.78,0.20,th*0.82,0x1a1d20,0.95);
-        for(var qy=0;qy<5;qy++){
-          var qyy=0.34+qy*0.36;
-          B.box(cx,qyy,cz+th*0.40,tw*0.60,0.09,0.03,0x2e1210,1.0);
-          B.box(cx-tw*0.20,qyy,cz+th*0.42,0.045,0.045,0.02,(qy%2?0xd8543a:0x4fd08a),1.7);
-          B.box(cx-tw*0.13,qyy,cz+th*0.42,0.045,0.045,0.02,0xe0b040,1.5);
-        }
-        continue;
-      }
-      if(ch==='Q'){
-        B.aoPatch(cx,cz,tw*0.9,th*0.8,0.85);
-        B.box(cx,0.62,cz,tw*0.80,1.24,th*0.70,0x521c1a,1.02);
-        B.box(cx,1.30,cz,tw*0.86,0.10,th*0.76,0x2a0f0e,1.0);
-        B.box(cx,1.62,cz-0.02,tw*0.62,0.42,0.05,0x1a2024,1.0);
-        B.box(cx,1.62,cz+0.01,tw*0.56,0.34,0.02,0x5ad0a0,1.35);
-        continue;
-      }
-      if(ch==='R'){ B.box(cx,0.92,cz,tw*0.85,1.84,th*0.7,PALETTE.shelf,1.0); continue; }
-      if(ch==='l'){
-        BF.aoPatch(cx,cz,tw*0.96,th*0.92,0.9);
-        B.box(cx,0.88,cz,tw*0.92,0.07,th*0.70,0x5b6a72,1.28);      /* 台面 */
-        B.box(cx,0.44,cz,tw*0.86,0.80,th*0.60,0x8b9498,1.02);      /* 柜体 */
-        B.box(cx-tw*0.41,0.44,cz,0.05,0.80,th*0.60,0x6a7478,1.0);  /* 侧板 */
-        B.box(cx+tw*0.41,0.44,cz,0.05,0.80,th*0.60,0x6a7478,1.0);
-        B.box(cx-tw*0.26,0.90,cz,tw*0.30,0.04,th*0.32,0x39434a,0.95);   /* 水槽 */
-        B.box(cx-tw*0.26,0.86,cz,tw*0.26,0.03,th*0.28,0x5a666c,1.15);
-        B.box(cx-tw*0.26,0.99,cz-th*0.15,0.03,0.16,0.03,0xa8b2b6,1.35); /* 水龙头 */
-        B.box(cx-tw*0.26,1.06,cz-th*0.22,0.10,0.03,0.03,0xa8b2b6,1.35);
-        B.box(cx-tw*0.38,1.07,cz-th*0.32,0.04,0.38,0.04,0x59636a,1.0);  /* 试剂架立柱 */
-        B.box(cx+tw*0.38,1.07,cz-th*0.32,0.04,0.38,0.04,0x59636a,1.0);
-        B.box(cx,1.26,cz-th*0.32,tw*0.88,0.05,0.13,0x59636a,1.05);      /* 试剂架 */
-        B.box(cx-tw*0.28,1.38,cz-th*0.32,0.07,0.22,0.07,0x86b4c8,1.45); /* 蓝瓶 */
-        B.box(cx+tw*0.03,1.37,cz-th*0.32,0.06,0.20,0.06,0xc6ae66,1.45); /* 黄瓶 */
-        B.box(cx+tw*0.28,1.36,cz-th*0.32,0.05,0.18,0.05,0xd8d2c4,1.30); /* 白瓶 */
-        B.box(cx+tw*0.02,0.45,cz+th*0.46,0.26,0.05,0.26,0x6a5a44,1.02); /* 凳面 */
-        B.box(cx+tw*0.02,0.22,cz+th*0.46,0.05,0.44,0.05,0x4a4034,1.0);  /* 凳腿 */
-        continue;
-      }
-      if(ch==='w'){ B.box(cx,0.42,cz,tw*0.8,0.84,th*0.7,PALETTE.basin,1.0); continue; }
-      if(ch==='v'){ B.box(cx,0.85,cz,tw*0.7,1.7,th*0.55,PALETTE.rack,1.0); continue; }
-      if(ch==='c'){
-        BF.aoPatch(cx,cz,tw*0.5,th*0.5,0.7); B.box(cx,0.66,cz,tw*0.92,1.32,th*0.86,PALETTE.car,1.0); continue; }
-      if(ch==='D'){ B.box(cx,0.78,cz,tw*0.7,1.1,th*0.6,PALETTE.data,1.05); continue; }
-      if(ch==='X'){                     /* 带轮子的大垃圾桶（以前是一块灰方砖） */
-        BF.aoPatch(cx,cz,tw*0.9,th*0.9,0.9);
-        B.box(cx,0.62,cz,tw*0.80,1.06,th*0.78,0x2f5a3a,1.0);
-        B.box(cx,1.18,cz-0.02,tw*0.86,0.07,th*0.84,0x24482e,1.05);           /* 盖子，没盖严 */
-        B.box(cx,1.24,cz-th*0.40,tw*0.70,0.05,0.05,0x1a2a1e,1.0);
-        B.box(cx-0.30,0.07,cz+0.30,0.12,0.14,0.06,0x111418,1.0);
-        B.box(cx+0.30,0.07,cz+0.30,0.12,0.14,0.06,0x111418,1.0);
-        B.box(cx,0.85,cz+th*0.40,0.30,0.30,0.01,0xd8d4c6,1.0);              /* 白色编号：3 */
-        continue;
-      }
-      if(ch==='B'||ch==='G'){           /* 厕所隔间：两侧隔板 + 一扇关着的门，上下都留空 */
-        B.box(cx-tw*0.47,1.05,cz,0.04,1.80,th*0.92,PALETTE.wall2,1.0);
-        B.box(cx+tw*0.47,1.05,cz,0.04,1.80,th*0.92,PALETTE.wall2,1.0);
-        B.box(cx,1.05,cz+th*0.44,tw*0.86,1.70,0.04,0x8a948e,1.0);
-        B.box(cx+tw*0.30,1.05,cz+th*0.47,0.05,0.10,0.03,0xb8c0c2,1.2);
-        B.box(cx+tw*0.36,1.05,cz+th*0.47,0.07,0.05,0.02,0xc04a3a,1.3);     /* 红色"有人" */
-        continue;
-      }
-      var colName=PALETTE_NAME[ch];
-      if(colName){ B.box(cx,0.4,cz,tw*0.85,0.8,th*0.85,PALETTE[colName]||PALETTE.wall,1.0); }
     }
   }
 
+  /* 实验楼（机房以外）：顶上走管道，墙角一个洗眼器 */
   if(R.host==='lab'&&R.floor<=5&&R.id!=='lab3'){
     var lz2=-halfH+1.0;
-    B.box(0,2.86,lz2+0.55,W*0.96,0.10,0.10,0x8a9298,1.05);
-    B.box(0,2.74,lz2+1.15,W*0.96,0.07,0.07,0xb46a3a,1.05);
+    K.rod('metal',-W*0.48,2.86,lz2+0.55,W*0.48,2.86,lz2+0.55,0.05,0.05,8,0x8a9298,1.05);
+    K.rod('metal',-W*0.48,2.74,lz2+1.15,W*0.48,2.74,lz2+1.15,0.035,0.035,8,0xb46a3a,1.05);
+    for(x=-20;x<=20;x+=8){ K.box('metal',x,2.92,lz2+0.55,0.04,0.12,0.04,0x6a7276,1); K.box('metal',x,2.85,lz2+1.15,0.04,0.22,0.04,0x6a7276,1); }
     if(R.floor===2){
-      /* 通风橱：靠在第一间、最后一间的南墙上（以前摆在隔墙正中，一半插在墙里） */
+      /* 通风橱：靠在第一间、最后一间的南墙上 */
       var fh, hoodC=[3.5,43.5];
       for(fh=0;fh<2;fh++){
         var fx=-halfW+hoodC[fh]*tw, fz=-halfH+15*th-0.46;
-        B.box(fx,1.10,fz,tw*1.9,2.20,0.86,0x6f7a80,1.05);              /* 柜体 */
-        B.box(fx,1.35,fz-0.44,tw*1.5,0.90,0.04,0x25303a,1.0);          /* 玻璃门 */
-        B.box(fx,1.35,fz-0.47,tw*1.4,0.80,0.02,0x9fc4d8,1.25);
-        B.box(fx,2.26,fz,tw*1.94,0.12,0.90,0x4a545a,1.0);              /* 顶罩 */
-        B.box(fx,0.90,fz-0.30,tw*1.7,0.06,0.30,0x39434a,1.0);          /* 操作台 */
-        solidM(fx,fz,tw*1.9,0.9);
+        K.bevel('metal',fx,0.45,fz,1.90,0.90,0.86,0x6f7a80,1.05,0.015);
+        K.bevel('stone',fx,0.92,fz,1.94,0.04,0.88,0x39434a,1.0,0.01);
+        K.box('glass',fx,1.42,fz-0.40,1.60,0.90,0.02,0x9fc4d8,1.25);                          /* 玻璃拉门 */
+        K.box('dark',fx,1.42,fz+0.02,1.70,0.96,0.76,0x1a2026,1.0);                            /* 里面 */
+        K.bevel('metal',fx,2.10,fz,1.94,0.40,0.90,0x6f7a80,1.05,0.015);
+        K.cyl('metal',fx,2.30,fz,0.14,0.12,0.70,10,0x8a9298,1.0);                             /* 排风管 */
+        K.box('metal',fx,1.88,fz-0.42,1.70,0.03,0.03,0x4a545a,1.1);
+        c.solid(fx,fz,1.9,0.9);
       }
     }
-    B.box(-halfW+1.0,0.55,-halfH+1.2,0.10,1.10,0.10,0x5aa07a,1.1);
-    B.box(-halfW+1.0,1.10,-halfH+1.5,0.34,0.06,0.24,0x5aa07a,1.1);
+    K.rod('plastic',-halfW+1.0,0,-halfH+1.2,-halfW+1.0,1.0,-halfH+1.2,0.04,0.04,6,0x5aa07a,1.1);   /* 洗眼器 */
+    K.cyl('plastic',-halfW+1.0,1.0,-halfH+1.4,0.12,0.08,0.06,10,0x5aa07a,1.1);
   }
 
+  /* 连廊：两侧整排窗，地上一条导视带 */
   if(R.host==='c1'||R.host==='c2'){
-    var cy2, wz2;
-    for(cy2=1;cy2<R.rows-1;cy2++){
-      wz2=-halfH+(cy2+0.5)*th;
-      B.box(-halfW+0.07,1.55,wz2,0.13,1.30,th*0.94,0x9fb0ba,1.15);   /* 西窗带 */
-      B.box( halfW-0.07,1.55,wz2,0.13,1.30,th*0.94,0x9fb0ba,1.15);   /* 东窗带 */
-      B.box(-halfW+0.16,0.90,wz2,0.05,0.06,th*0.94,0x6a747c,1.0);     /* 窗台压边 */
-      B.box( halfW-0.16,0.90,wz2,0.05,0.06,th*0.94,0x6a747c,1.0);
+    var cy2;
+    for(cy2=1;cy2<H-1;cy2+=2){
+      var wz2=CZ(cy2)+0.5;
+      wallWindow(K,-halfW+tw,wz2,1,0,1.8,0.95,2.40,2);
+      wallWindow(K, halfW-tw,wz2,-1,0,1.8,0.95,2.40,2);
     }
-    B.box(0,0.012,0,0.30,0.024,(R.rows-2)*th*0.96,0x59636b,1.0);     /* 地面导视条 */
+    K.g('decal').quad(-0.15,-(H-2)*th*0.48,0.15,-(H-2)*th*0.48,0.15,(H-2)*th*0.48,-0.15,(H-2)*th*0.48,0.006,0x59636b);
   }
 
-  if(R.host==='teach'&&R.floor>=1&&R.floor<=5){
+  if(teachFl){
     var zWallS=-halfH+15*th;            /* 教室南墙（走廊那侧） */
-    var zWallN=-halfH+21*th;            /* 走廊北墙 */
-    for(var sx=1;sx<W-1;sx+=2){
-      B.quad(-halfW+sx*tw, zWallN*0.0 + (-halfH+18.55*th), -halfW+(sx+1)*tw, (-halfH+18.55*th),
-             -halfW+(sx+1)*tw, (-halfH+18.45*th), -halfW+sx*tw, (-halfH+18.45*th), 0.006, 0x59636b);
-    }
-    for(var lx=3;lx<W-3;lx+=4){
+    var zWallN=-halfH+21*th;            /* 走廊南外墙 */
+    /* 走廊中线：虚线 */
+    var sx;
+    for(sx=1;sx<W-1;sx+=2) K.g('decal').quad(-halfW+sx*tw,-halfH+18.45*th,-halfW+(sx+1)*tw,-halfH+18.45*th,-halfW+(sx+1)*tw,-halfH+18.55*th,-halfW+sx*tw,-halfH+18.55*th,0.006,0x59636b);
+    /* 储物柜：一组四门，门缝、把手、通风孔 */
+    var lx;
+    for(lx=3;lx<W-3;lx+=4){
       if(lx>=56&&lx<=61) continue;
-      var lz=zWallS+th+0.24;
-      B.box(-halfW+(lx+0.5)*tw, 0.86, lz, tw*0.86, 1.72, 0.42, 0x39424a, 0.98);
-      B.box(-halfW+(lx+0.5)*tw, 1.28, lz+0.22, tw*0.80, 0.03, 0.02, 0x59636b, 1.0);   /* 柜门缝朝走廊 */
-      solidM(-halfW+(lx+0.5)*tw, lz, tw*0.86, 0.42);
-    }
-    for(var bx2=6;bx2<W-6;bx2+=13){
-      var bb0=Math.floor(bx2+1.3), bbOK=true;
-      for(var bi=-1;bi<=1;bi++){
-        var brow=R.grid.length-1;
-        if(!R.grid[brow]||R.grid[brow][bb0+bi]!=='#'){ bbOK=false; break; }
+      var lcx=-halfW+(lx+0.5)*tw, lz=zWallS+th+0.24;
+      K.bevel('metal',lcx,0.86,lz,0.86,1.72,0.42,0x39424a,0.98,0.01);
+      var dk;
+      for(dk=0;dk<4;dk++){
+        var dxl=lcx-0.32+dk*0.215;
+        K.box('dark',dxl+0.107,0.86,lz+0.211,0.004,1.60,0.004,0x1a2026,1);
+        K.box('metal',dxl+0.07,1.05,lz+0.215,0.02,0.10,0.012,0x8a949a,1.2);
+        K.box('dark',dxl,1.55,lz+0.212,0.12,0.03,0.002,0x1a2026,1);
+        K.box('dark',dxl,1.50,lz+0.212,0.12,0.03,0.002,0x1a2026,1);
       }
+      c.solid(lcx, lz, 0.86, 0.42);
+    }
+    /* 走廊外墙：宣传栏 + 消防栓箱 */
+    var bx2;
+    for(bx2=6;bx2<W-6;bx2+=13){
+      var bb0=Math.floor(bx2+1.3), bbOK=true, bi;
+      for(bi=-1;bi<=1;bi++){ var brow=R.grid.length-1; if(!R.grid[brow]||R.grid[brow][bb0+bi]!=='#'){ bbOK=false; break; } }
       if(!bbOK) continue;
-      B.box(-halfW+(bx2+0.5)*tw, 1.85, zWallN-0.10, tw*2.6, 0.98, 0.06, 0x1a2126, 1.0);
-      B.box(-halfW+(bx2+0.5)*tw, 1.85, zWallN-0.13, tw*2.5, 0.90, 0.02, 0x8e9a94, 1.0);
-      B.box(-halfW+(bx2+7.5)*tw, 0.95, zWallN-0.12, tw*0.7, 0.9, 0.16, 0x7a3a33, 1.0);
+      var bcx2=-halfW+(bx2+0.5)*tw;
+      K.bevel('metal',bcx2,1.85,zWallN-0.04,2.6,0.98,0.06,0x1a2126,1.0,0.01);
+      K.box('paper',bcx2,1.85,zWallN-0.075,2.5,0.90,0.01,0x8e9a94,1.0);
+      for(bi=0;bi<5;bi++) K.box('paper',bcx2-1.0+bi*0.5,1.85+(hash2(bi,bx2)-0.5)*0.3,zWallN-0.082,0.38,0.5,0.004,[0xe8e4dc,0xd8c8a8,0xc8d8e0][bi%3],1);
+      K.box('glass',bcx2,1.85,zWallN-0.09,2.5,0.90,0.01,0xb8c8d0,1.1);
+      var fxb=-halfW+(bx2+7.5)*tw;
+      K.bevel('metal',fxb,0.95,zWallN-0.08,0.70,0.90,0.16,0x7a3a33,1.0,0.01);
+      K.box('glass',fxb,1.0,zWallN-0.162,0.40,0.50,0.004,0xb8c8d0,1.1);
+      K.box('paper',fxb,1.33,zWallN-0.162,0.5,0.08,0.002,0xe8e4dc,1);
+    }
+    /* 走廊顶上的梁 */
+    var bmz=18.5*th-halfH, bmx;
+    for(bmx=0;bmx<W;bmx+=7) K.box('concrete',CX(bmx),2.86,bmz,0.22,0.28,th*4.6,0xb4afa6,0.96);
+    /* 教室：黑板、高窗、后墙的钟和黑板报、讲台上方的广播 */
+    for(i=0;i<CLS_SPAN.length;i++){
+      var c0=CLS_SPAN[i][0], c1b=CLS_SPAN[i][1];
+      var bcx=(CX(c0)+CX(c1b))/2, bwid=(c1b-c0+1)*tw*0.72, wz=-halfH+tw;
+      K.bevel('metal',bcx,1.70,wz+0.04,bwid+0.12,1.17,0.06,0x8a9298,1.0,0.012);           /* 黑板边框 */
+      K.box('board',bcx,1.70,wz+0.075,bwid,1.05,0.01,0x2a3a34,1.0);
+      K.box('metal',bcx,1.15,wz+0.12,bwid+0.12,0.04,0.14,0x6a7276,1.0);                    /* 粉笔槽 */
+      K.box('plastic',bcx-0.6,1.18,wz+0.11,0.08,0.015,0.015,0xe8e8e0,1);
+      K.box('plastic',bcx-0.5,1.18,wz+0.13,0.06,0.015,0.015,0xd86a6a,1);
+      K.bevel('wood',bcx+0.8,1.19,wz+0.12,0.16,0.05,0.07,0x3a3028,1,0.01);                  /* 板擦 */
+      var hwid=(c1b-c0+1)*tw*0.82, mu;
+      K.box('sky',bcx,2.63,wz+0.007,hwid,0.46,0.004,0xffffff,0.9);                         /* 高窗 */
+      K.box('metal',bcx,2.89,wz+0.03,hwid+0.16,0.06,0.06,0x39434a,1.0);
+      K.box('metal',bcx,2.37,wz+0.05,hwid+0.16,0.06,0.10,0x39434a,1.0);
+      for(mu=1;mu<5;mu++) K.box('metal',bcx-hwid/2+(hwid/5)*mu,2.63,wz+0.03,0.045,0.50,0.05,0x39434a,1.05);
+      K.bevel('plastic',bcx,2.62,wz+0.06,0.10,0.001,0.10,0x2a2a2a,1,0);
+      K.bevel('plastic',bcx+bwid/2+0.35,2.55,wz+0.08,0.24,0.32,0.14,0x2a2e32,1,0.02);      /* 广播喇叭 */
+      K.box('dark',bcx+bwid/2+0.35,2.55,wz+0.152,0.18,0.24,0.004,0x0a0c0e,1);
+      var zS=zWallS-0.04;                                                                   /* 后墙内表面 */
+      K.rod('plastic',bcx,2.58,zS+0.02,bcx,2.58,zS-0.05,0.29,0.29,16,0x1b1f22,1.0);        /* 钟 */
+      K.rod('paper',bcx,2.58,zS-0.05,bcx,2.58,zS-0.055,0.25,0.25,16,0xc6cfcb,1.0);
+      K.box('dark',bcx,2.64,zS-0.06,0.025,0.16,0.004,0x22282a,1);
+      K.box('dark',bcx+0.05,2.58,zS-0.06,0.11,0.025,0.004,0x22282a,1);
+      var bbx=CX(c0)+1.25;                                                                  /* 黑板报，让开门 */
+      K.bevel('board',bbx,1.55,zWallS-0.02,2.2,1.05,0.04,0x23302a,1.0,0.01);
+      var bk;
+      for(bk=0;bk<6;bk++) K.box('emit',bbx-0.8+bk*0.3,1.75-((bk*7)%4)*0.12,zWallS-0.042,0.20+hash2(bk,i)*0.1,0.03,0.002,[0xe8e0c8,0xd8a0a0,0xa8c8e0][bk%3],0.55);
     }
   }
+
   if(R.id==='gear1'){
-    var gx2, gz2;
-    for(gz2=0;gz2<H;gz2++){
-      for(gx2=0;gx2<W;gx2++){
-        if(R.grid[gz2][gx2]!=='#') continue;
-        B.box(CX(gx2),WALLH/2,CZ(gz2),tw*1.02,WALLH,th*1.02,0x27502f,0.95);
-      }
-    }
-    /* 一张乒乓球台，竖着放在货架对面（以前两张，第二张有一半在墙外） */
-    var ttx=1.9, ttz=0.1;
-    B.box(ttx,0.76,ttz,1.52,0.05,2.74,0x1f3f6e,1.15);
-    B.box(ttx,0.785,ttz,0.02,0.005,2.70,0xe8e8e8,1.0);
-    B.box(ttx-0.6,0.38,ttz-1.1,0.06,0.76,0.06,0x3a3f42,1.0); B.box(ttx+0.6,0.38,ttz-1.1,0.06,0.76,0.06,0x3a3f42,1.0);
-    B.box(ttx-0.6,0.38,ttz+1.1,0.06,0.76,0.06,0x3a3f42,1.0); B.box(ttx+0.6,0.38,ttz+1.1,0.06,0.76,0.06,0x3a3f42,1.0);
-    B.box(ttx,0.86,ttz,1.60,0.15,0.02,0xd8d8d2,0.95);                  /* 球网 */
-    solidM(ttx,ttz,1.52,2.74);
-    /* 角落里一筐篮球、一卷跳绳 */
-    B.box(-2.4,0.30,1.4,0.8,0.6,0.6,0x5a5f62,1.0);
+    /* 一张乒乓球台 + 角落里一筐篮球 */
+    var ttx=1.9, ttz=0.1, lx2, lz3;
+    K.bevel('wood',ttx,0.76,ttz,1.52,0.04,2.74,0x1f3f6e,1.15,0.008);
+    K.box('paper',ttx,0.781,ttz,0.02,0.002,2.70,0xe8e8e8,1.0);
+    K.box('paper',ttx-0.75,0.781,ttz,0.02,0.002,2.70,0xe8e8e8,1.0);
+    K.box('paper',ttx+0.75,0.781,ttz,0.02,0.002,2.70,0xe8e8e8,1.0);
+    for(lx2=-1;lx2<=1;lx2+=2) for(lz3=-1;lz3<=1;lz3+=2) K.rod('metal',ttx+lx2*0.62,0,ttz+lz3*1.10,ttx+lx2*0.62,0.74,ttz+lz3*1.10,0.025,0.025,6,0x3a3f42);
+    K.box('fabric',ttx,0.86,ttz,1.60,0.15,0.01,0xd8d8d2,0.95);                            /* 球网 */
+    K.rod('metal',ttx-0.80,0.76,ttz,ttx-0.80,0.94,ttz,0.012,0.012,5,0x3a3f42);
+    K.rod('metal',ttx+0.80,0.76,ttz,ttx+0.80,0.94,ttz,0.012,0.012,5,0x3a3f42);
+    c.solid(ttx,ttz,1.52,2.74);
+    K.bevel('metal',-2.4,0.30,1.4,0.8,0.6,0.6,0x5a5f62,1.0,0.02);
     var bb3;
-    for(bb3=0;bb3<4;bb3++) B.box(-2.6+(bb3%2)*0.4,0.66,1.25+((bb3>>1)*0.3),0.24,0.24,0.24,0xc0602a,1.0);
-    solidM(-2.4,1.4,0.8,0.6);
-  }
-  if(R.host==='teach'&&R.floor>=1&&R.floor<=5){
-    var spans=[[5,11],[13,19],[21,27],[29,35],[37,43],[45,51]];
-    var zSInner=-halfH+15*th;                 /* 教室南墙内表面（后墙） */
-    for(i=0;i<spans.length;i++){
-      var c0=spans[i][0], c1b=spans[i][1];
-      var bcx=(CX(c0)+CX(c1b))/2;
-      var bwid=(c1b-c0+1)*tw*0.72;
-      var wz=-halfH+tw;                       /* 北墙内表面 */
-      B.box(bcx,1.70,wz+0.13,bwid,1.05,0.08,0x161d22,1.0);
-      B.box(bcx,1.15,wz+0.17,bwid+0.12,0.06,0.16,0x4a3f33,1.0);
-      B.box(bcx,2.26,wz+0.12,bwid+0.14,0.05,0.10,0x3a3229,1.0);
-      var hwid=(c1b-c0+1)*tw*0.82;
-      G.quadN([bcx-hwid/2,2.86,wz+0.07],[bcx+hwid/2,2.86,wz+0.07],
-              [bcx+hwid/2,2.40,wz+0.07],[bcx-hwid/2,2.40,wz+0.07],0,1,0,0x9dbdd0);
-      B.box(bcx,2.93,wz+0.05,hwid+0.16,0.07,0.10,0x39434a,1.0);
-      B.box(bcx,2.33,wz+0.05,hwid+0.16,0.07,0.10,0x39434a,1.0);
-      for(var mu=1;mu<5;mu++){
-        var mx2=bcx-hwid/2+ (hwid/5)*mu;
-        B.box(mx2,2.60,wz+0.07,0.045,0.50,0.05,0x39434a,1.05);
-      }
-      B.box(bcx,2.58,zSInner-0.06,0.58,0.58,0.09,0x1b1f22,1.0);
-      B.box(bcx,2.58,zSInner-0.11,0.46,0.46,0.02,0xc6cfcb,1.0);
-      B.box(bcx,2.64,zSInner-0.13,0.03,0.20,0.01,0x22282a,1.0);
-      B.box(bcx+0.06,2.58,zSInner-0.13,0.14,0.03,0.01,0x22282a,1.0);
-    }
+    for(bb3=0;bb3<4;bb3++) K.blob('plastic',-2.6+(bb3%2)*0.4,0.71,1.25+((bb3>>1)*0.3),0.12,0.12,0.12,0xc0602a,1.0,8);
+    c.solid(-2.4,1.4,0.8,0.6);
   }
 
-  if(!isRoof&&R.host==='teach'&&R.floor>=1&&R.floor<=5){
-    var bmz=(18.5)*th-halfH;
-    for(var bmx=0;bmx<W;bmx+=7){
-      B.box(CX(bmx),2.86,bmz,0.20,0.24,th*4.6,0xb4afa6,0.96);
-    }
-  }
-
-  if(!isRoof&&R.host!=='bell'){     /* 钟楼里只有蜡烛，不挂日光灯管 */
-    var rows=[];
-    if(R.host==='teach'&&R.floor>=1&&R.floor<=5){ rows.push(18); }
-    else { rows.push(Math.floor(H*0.5)); }
-    for(i=0;i<rows.length;i++){
-      for(x=3;x<W-3;x+=9){
-        var lx=CX(x), lz=CZ(rows[i]);
-        G.quadN([lx-0.9,WALLH-0.04,lz-0.12],[lx+0.9,WALLH-0.04,lz-0.12],[lx+0.9,WALLH-0.04,lz+0.12],[lx-0.9,WALLH-0.04,lz+0.12],0,-1,0,0xdcecf4);
+  if(R.id==='garage1'){
+    /* 车位线、柱子上的黄黑警示带、顶上的管道 */
+    var gy, gxx;
+    for(gxx=0;gxx<W;gxx++) for(gy=0;gy<H;gy++){
+      if(R.grid[gy][gxx]==='V'){
+        var vx=CX(gxx), vz=CZ(gy);
+        K.g('decal').quad(vx-2.2,vz-1.3,vx+2.2,vz-1.3,vx+2.2,vz-1.22,vx-2.2,vz-1.22,0.006,0xd8d4c4);
+        K.g('decal').quad(vx-2.2,vz+1.22,vx+2.2,vz+1.22,vx+2.2,vz+1.3,vx-2.2,vz+1.3,0.006,0xd8d4c4);
+        K.g('decal').quad(vx-2.28,vz-1.3,vx-2.2,vz-1.3,vx-2.2,vz+1.3,vx-2.28,vz+1.3,0.006,0xd8d4c4);
       }
-      if(R.host==='teach'&&R.floor>=1&&R.floor<=5){
-        var cs=[[5,11],[13,19],[21,27],[29,35],[37,43],[45,51]];
-        for(var ci=0;ci<cs.length;ci++){
-          var mx=(CX(cs[ci][0])+CX(cs[ci][1]))/2;
-          for(var rr2=4;rr2<=10;rr2+=6){
-            var lz2=CZ(rr2);
-            G.quadN([mx-1.1,WALLH-0.05,lz2-0.16],[mx+1.1,WALLH-0.05,lz2-0.16],[mx+1.1,WALLH-0.05,lz2+0.16],[mx-1.1,WALLH-0.05,lz2+0.16],0,-1,0,0xe6f2f8);
-          }
-        }
+      if(R.grid[gy][gxx]==='#'&&gxx>0&&gy>0&&gxx<W-1&&gy<H-1){
+        var pcx=CX(gxx), pcz=CZ(gy), kb;
+        for(kb=0;kb<4;kb++) K.box('plastic',pcx,0.15+kb*0.25,pcz,1.02,0.12,1.02,kb%2?0x1a1a18:0xc8a830,1.0);
       }
     }
+    for(gy=3;gy<H-2;gy+=7) K.rod('metal',-halfW+1,2.82,CZ(gy),halfW-1,2.82,CZ(gy),0.08,0.08,8,0x4a4e50);
+    K.g('decal').quad(-halfW+1,CZ(13)-0.06,halfW-4,CZ(13)-0.06,halfW-4,CZ(13)+0.06,-halfW+1,CZ(13)+0.06,0.006,0xc8b24a);   /* 车道中线 */
   }
-  var meshS=new THREE.Mesh(B.build(),matFor('wall'));
-  meshS.castShadow=true; meshS.receiveShadow=true;
-  var meshF=new THREE.Mesh(BF.build(),new THREE.MeshPhongMaterial({vertexColors:true,shininess:0,specular:0x000000,flatShading:false}));
 
-  var meshG=new THREE.Mesh(G.build(),new THREE.MeshBasicMaterial({vertexColors:true,fog:true}));
-  meshG.frustumCulled=false;
-  var grp=new THREE.Group();
-  grp.add(meshS); grp.add(meshF); grp.add(meshG);
-  return grp;
+  /* 吸顶灯盘 */
+  if(!isRoof&&R.host!=='bell'){
+    if(teachFl){
+      for(x=3;x<W-3;x+=9) ceilingLight(K,CX(x),CZ(18),1.8,0.24,0);
+      var cs=CLS_SPAN, ci;
+      for(ci=0;ci<cs.length;ci++){
+        var mx=(CX(cs[ci][0])+CX(cs[ci][1]))/2;
+        ceilingLight(K,mx,CZ(4),2.2,0.32,0); ceilingLight(K,mx,CZ(10),2.2,0.32,0);
+      }
+    }else if(R.id!=='garage1'){
+      for(x=3;x<W-3;x+=9) ceilingLight(K,CX(x),CZ(Math.floor(H*0.5)),1.8,0.24,0);
+    }else{
+      ceilingLight(K,CX(W-6),CZ(13),1.2,0.20,0);       /* 车库最里面那一盏 */
+    }
+  }
 }

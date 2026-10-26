@@ -2,21 +2,10 @@
 'use strict';
 
 function buildRoamFigure(){
+  /* 车库里那个：比人高，手垂过膝盖，纯黑，不吃光 */
   try{
     var grp=new THREE.Group();
-    var mat=new THREE.MeshBasicMaterial({color:0x05070a,fog:true});
-    function part(w,h,d,x,y,z){
-      var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
-      m.position.set(x,y,z);
-      grp.add(m);
-    }
-    part(0.15,1.20,0.15,-0.10,0.60,0);      /* 左腿 */
-    part(0.15,1.20,0.15, 0.10,0.60,0);      /* 右腿 */
-    part(0.38,0.90,0.20,  0.00,1.68,0);     /* 躯干 */
-    part(0.09,1.45,0.09,-0.24,1.42,0);      /* 左臂，垂得很长 */
-    part(0.09,1.45,0.09, 0.24,1.42,0);      /* 右臂 */
-    part(0.10,0.22,0.10,-0.10,2.22,0);      /* 颈 */
-    part(0.19,0.24,0.19, 0.00,2.42,0);      /* 头 */
+    grp.add(figMesh('roam',new THREE.MeshBasicMaterial({color:0x05070a,fog:true}),1));
     return grp;
   }catch(e){ return null; }
 }
@@ -58,14 +47,9 @@ function anfxBox(grp,mat,w,h,d,x,y,z){
   grp.add(m);
   return m;
 }
-function anfxFigure(grp,mat,x,z,scale,hunch){
-  var s=scale||1;
-  anfxBox(grp,mat,0.15*s,1.2*s,0.15*s,-0.10*s,0.60*s,z===undefined?0:0);
-  anfxBox(grp,mat,0.15*s,1.2*s,0.15*s, 0.10*s,0.60*s,0);
-  anfxBox(grp,mat,0.38*s,0.90*s,0.20*s, 0,1.68*s,0);
-  anfxBox(grp,mat,0.09*s,1.30*s,0.09*s,-0.24*s,1.42*s,0);
-  anfxBox(grp,mat,0.09*s,1.30*s,0.09*s, 0.24*s,1.42*s,0);
-  anfxBox(grp,mat,0.19*s,0.24*s,0.19*s, 0,2.42*s,0);
+/* 异象里的人影（统一人形，见 model/figure.js）；正面朝 +z */
+function anfxFigure(grp,mat,x,z,scale,hunch,kind){
+  grp.add(figMesh(kind||'tall',mat,scale||1));
   if(hunch){ grp.rotation.x=-0.25; }
   grp.position.set(x,0,z);
 }
@@ -101,7 +85,7 @@ function anfxSpawn(kind,wx,wy){
     }
   } else if(kind==='necker'){
     var nm=anfxMat(0x121619,1.0);
-    var ng=new THREE.Group(); anfxFigure(ng,nm,0,0,1.55,false);
+    var ng=new THREE.Group(); anfxFigure(ng,nm,0,0,1.4,false,'neck');
     ng.position.set(p.x,0,p.z);
     grp.add(ng);
     ANFX.items.push(ng);
@@ -183,11 +167,7 @@ function anfxSpawn(kind,wx,wy){
         for(lr=2;lr<RF.rows-2&&lampN<30;lr+=5){
           for(lc=2;lc<RF.cols-2&&lampN<30;lc+=7){
             var lw=worldToScene(RF.ox+(lc+0.5)*RF.tw, RF.oy+(lr+0.5)*RF.th, RF);
-            anfxBox(grp,lantR,0.38,0.46,0.38,lw.x,2.42,lw.z);          /* 灯笼身 */
-            anfxBox(grp,lantW,0.40,0.05,0.40,lw.x,2.66,lw.z);          /* 上沿 */
-            anfxBox(grp,lantW,0.40,0.05,0.40,lw.x,2.18,lw.z);          /* 下沿 */
-            anfxBox(grp,lantY,0.05,0.34,0.05,lw.x,1.98,lw.z);          /* 穗子 */
-            anfxBox(grp,lantY,0.02,0.55,0.02,lw.x,2.90,lw.z);          /* 吊线 */
+            var ln=fxMesh('lantern'); ln.position.set(lw.x,0,lw.z); grp.add(ln);   /* 红灯笼 */
             lampN++;
           }
         }
@@ -334,14 +314,7 @@ function deathFX(type){
         var hrad=0.85+Math.random()*1.5;
         var hx=hp.x+Math.cos(hang)*hrad, hz=hp.z+Math.sin(hang)*hrad;
         var hg=new THREE.Group();
-        anfxBox(hg,flesh,0.24,0.07,0.26,0,0,0);                 /* 掌 */
-        anfxBox(hg,flesh,0.12,0.09,0.46,0,0,-0.32);             /* 小臂 */
-        for(hf=0;hf<5;hf++){
-          var fx0=-0.095+hf*0.047;
-          anfxBox(hg,flesh,0.040,0.055,0.13,fx0,0.02,0.18);     /* 指根 */
-          anfxBox(hg,flesh,0.034,0.10,0.036,fx0,0.07,0.26);     /* 指节（抓起来的姿势） */
-        }
-        anfxBox(hg,flesh,0.05,0.08,0.05,-0.13,0.01,0.06);       /* 拇指 */
+        hg.add(fxMesh('hand'));                                 /* 掌、五根弯着的手指、一截小臂 */
         hg.position.set(hx,-1.0,hz);
         hg.rotation.y=-(Math.PI/2+hang);                        /* 手指朝圆心 */
         hg.userData={t:hi*0.085, ph:Math.random()*6.283};
@@ -359,15 +332,13 @@ function deathFX(type){
       var flesh=anfxMat(0x7c302c,1.0);
       var nseg=8, sh=0.42;
       for(i=0;i<nseg;i++){
-        var sg=anfxBox(grp,flesh,0.17,sh,0.17,nq.x,0.21+i*sh,nq.z);
+        var sg=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.085,sh,8),flesh);   /* 一节一节的脖子 */
+        sg.position.set(nq.x,0.21+i*sh,nq.z); grp.add(sg);
         sg.visible=false;
         push(sg);
       }
       var head=new THREE.Group();
-      anfxBox(head,flesh,0.44,0.42,0.44,0,0,0);
-      anfxBox(head,dark,0.10,0.10,0.06,-0.11,0.06,0.22);      /* 眼 */
-      anfxBox(head,dark,0.10,0.10,0.06, 0.11,0.06,0.22);
-      anfxBox(head,flesh,0.30,0.11,0.26,0,0.27,0.03);         /* 头顶 */
+      head.add(fxMesh('neckhead'));
       head.position.set(nq.x,0.21,nq.z);
       head.visible=false;
       grp.add(head); push(head);
@@ -424,11 +395,7 @@ function deathFX(type){
         var ha=i/14*6.283+0.2, hr2=2.4+Math.random()*2.2, hy=1.45+Math.random()*0.5;
         var hx2=sp0.x+Math.cos(ha)*hr2, hz2=sp0.z+Math.sin(ha)*hr2;
         var hg=new THREE.Group();
-        anfxBox(hg,hk,0.22,0.22,0.22,0,0,0);                 /* 后脑 */
-        anfxBox(hg,hf,0.17,0.17,0.03,0,0,0.115);             /* 脸 */
-        anfxBox(hg,hd2,0.05,0.05,0.02,-0.045,0.02,0.132);    /* 眼 */
-        anfxBox(hg,hd2,0.05,0.05,0.02, 0.045,0.02,0.132);
-        anfxBox(hg,hk,0.16,0.30,0.20,0,0.26,-0.02);          /* 脖子/肩 */
+        hg.add(fxMesh('head'));                              /* 后脑、苍白的脸、黑眼窝、脖子和肩 */
         hg.position.set(hx2,hy,hz2);
         hg.userData={head:1,a:ha,r:hr2,y:hy};
         grp.add(hg); push(hg);
@@ -470,12 +437,7 @@ function deathFX(type){
     }
     else if(T==='bell'){
       var bz=anfxW2S(S.x,S.y);
-      var bronze=anfxMat(0x7a5a2a,1.0), bronze2=anfxMat(0x96703a,1.05);
-      push(anfxBox(grp,anfxMat(0x2a2018,1.0),1.5,0.12,0.5,bz.x,2.72,bz.z));
-      push(anfxBox(grp,bronze,1.15,0.28,1.15,bz.x,2.50,bz.z));
-      push(anfxBox(grp,bronze2,1.55,0.24,1.55,bz.x,2.16,bz.z));
-      push(anfxBox(grp,bronze2,1.75,0.20,1.75,bz.x,1.90,bz.z));
-      push(anfxBox(grp,anfxMat(0x3a2c1a,1.0),0.22,0.50,0.22,bz.x,1.55,bz.z));
+      var bm=fxMesh('bell'); bm.position.set(bz.x,0,bz.z); grp.add(bm); push(bm);
       push(anfxBox(grp,anfxMat(0x0a0d10,0.45),2.1,0.006,2.1,bz.x,0.008,bz.z));
     }
     else if(T==='follow'){
@@ -587,10 +549,7 @@ function deathFX(type){
     else if(T==='face'){
       var fq3=anfxW2S(S.x+Math.cos(S.ang)*3.8, S.y+Math.sin(S.ang)*3.8);
       var fg2=new THREE.Group();
-      anfxBox(fg2,anfxMat(0xcac2b4,0.97),1.05,1.45,0.14,0,1.78,0);
-      anfxBox(fg2,anfxMat(0x05080a,1.0),0.21,0.10,0.06,-0.24,1.98,0.09);
-      anfxBox(fg2,anfxMat(0x05080a,1.0),0.21,0.10,0.06, 0.24,1.98,0.09);
-      anfxBox(fg2,anfxMat(0x05080a,1.0),0.46,0.06,0.06, 0,1.52,0.09);
+      fg2.add(fxMesh('bigface'));
       fg2.position.set(fq3.x,0,fq3.z);
       fg2.rotation.y=-Math.PI/2-S.ang;
       fg2.userData={fx:fq3.x, fz:fq3.z};
@@ -766,7 +725,8 @@ function anfxUpdate(dt){
     } else if(dtp==='bell'){
       for(it=0;it<ANFX.items.length;it++){
         ob=ANFX.items[it];
-        if(ob.position.y>1.2) ob.position.x+=Math.sin(kk*31+it)*0.004;
+        ob.rotation.z=Math.sin(kk*9+it)*0.05*Math.max(0,1-kk*0.3);   /* 钟还在嗡嗡地晃 */
+        ob.position.y=Math.max(-0.6,-kk*0.25);                          /* 慢慢压下来 */
       }
     } else if(dtp==='names'){
       for(it=0;it<ANFX.items.length;it++){ ob=ANFX.items[it]; ob.visible=(it%3)<=Math.floor(kk*6)%3; }

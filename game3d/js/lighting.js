@@ -171,6 +171,11 @@ function lampTick(s){
     var lc=mixRGB(c0,c1,smooth01(0.15,0.7,night));
     GLR.lampHeadMat.color.setRGB(lc[0],lc[1],lc[2]);
   }
+  if(GLR.winSkyMat){                       /* 室内窗玻璃里透进来的天光 */
+    var sk=skyRGB(hourNow())[2], dk=s.day;
+    var kk=0.55+0.45*dk;
+    GLR.winSkyMat.color.setRGB(sk[0]/255*kk,sk[1]/255*kk,sk[2]/255*kk,THREE.SRGBColorSpace);
+  }
   if(GLR.winLitMat){
     var wc=mixRGB([0.20,0.27,0.31],[0.95,0.78,0.48],smooth01(0.2,0.8,night));
     GLR.winLitMat.color.setRGB(wc[0],wc[1],wc[2]);

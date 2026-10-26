@@ -92,14 +92,9 @@ function fnPeopleBuild(){
     var d=Math.hypot(w.x-p.x,w.z-p.z);
     if(d<2.2||d>7.5) continue;
     var fg=new THREE.Group();
-    anfxBox(fg,FN_P.mat,0.15,1.24,0.15,-0.10,0.62,0);
-    anfxBox(fg,FN_P.mat,0.15,1.24,0.15, 0.10,0.62,0);
-    anfxBox(fg,FN_P.mat,0.40,0.58,0.23, 0,1.30,0);
-    anfxBox(fg,FN_P.mat,0.22,0.22,0.22, 0,1.76,0);
-    anfxBox(fg,FN_P.mat,0.09,0.60,0.09,-0.26,1.34,0.02);
-    anfxBox(fg,FN_P.mat,0.09,0.60,0.09, 0.26,1.34,0.02);
+    fg.add(figMesh('person',FN_P.mat,1));
     fg.position.set(w.x,0,w.z);
-    fg.rotation.y=Math.atan2(p.x-w.x,p.z-w.z)+Math.PI;
+    fg.rotation.y=Math.atan2(p.x-w.x,p.z-w.z);                 /* 正面（+z）朝着你 */
     g.add(fg);
     made++;
   }

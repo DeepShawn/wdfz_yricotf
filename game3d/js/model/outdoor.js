@@ -5,7 +5,7 @@
    以前主路、绿篱、花坛、路灯全沿 x=514 一条线摆，直接穿过篮球场、羽毛球场、行政楼和小跑道。
    现在路走在楼与楼之间；树、灯、花坛、长椅都过一遍 outFree() 避让检查。
    坐标都是"地图单位"（M() 换成米）。 */
-var OUTX={L:null,W:null};
+var OUTX={treeN:0};
 var OUT_SOLID=[];       /* 室外的实心物：{x0,y0,x1,y1}，地图单位 */
 var ROADS=[
   [470,97,548,207],    /* 北门广场 */
@@ -53,158 +53,58 @@ function addSolidM(cx,cz,hw,hd){          /* 以米为单位登记一个实心�
   var k=1/(SC*U2M);
   OUT_SOLID.push({x0:(cx-hw)*k,y0:(cz-hd)*k,x1:(cx+hw)*k,y1:(cz+hd)*k});
 }
-/* 一面墙上没被别的楼挡住的区段（地图单位的 x 区间） */
-function faceFreeSpans(o,face){
-  var fy=(face==='s')?o.y+o.h:o.y, spans=[[o.x,o.x+o.w]], i, j;
-  for(i=0;i<OBJ.length;i++){
-    var b=OBJ[i]; if(b===o||b.k!=='roof') continue;
-    if(fy<b.y-2||fy>b.y+b.h+2) continue;
-    var out=[];
-    for(j=0;j<spans.length;j++){
-      var a0=spans[j][0], a1=spans[j][1];
-      if(b.x>=a1||b.x+b.w<=a0){ out.push([a0,a1]); continue; }
-      if(b.x>a0) out.push([a0,b.x-3]);
-      if(b.x+b.w<a1) out.push([b.x+b.w+3,a1]);
-    }
-    spans=out;
-  }
-  return spans;
-}
-/* 夜里亮着的窗：每栋只亮几格，位置固定（不随刷新变） */
-function litWindows(o,px,pz,sw,sd,nfl,base,total){
-  if(!OUTX.W) return;
-  var fl, k, n=Math.max(3,Math.round(sw/7));
-  for(fl=1;fl<=nfl;fl++){
-    var fy=base+(fl-0.5)*(total-base)/(nfl+0.6);
-    if(o.id==='dormN'||o.id==='dormS') fy=fl*(total/(nfl+0.5))-1.1;
-    for(k=0;k<n;k++){
-      var h=hash2(o.x*3+fl*11,k*17+o.y);
-      if(h>0.24) continue;
-      var wx=px-sw*0.44+(k+0.5)*(sw*0.88/n);
-      var side=(hash2(k,fl*5+o.x)<0.5)?1:-1;
-      OUTX.W.box(wx,fy,pz+side*(sd/2+0.115),1.5,0.78,0.02,0xffffff,1.0);
-    }
-  }
-}
-function courtGear(B,o,px,pz,sw,sd){
-  var along=(sw>sd), i;
-  if(o.id.indexOf('bad')===0){
-    /* 羽毛球网：每片场地一张 */
-    var nC=(o.id==='bad3')?3:2;
-    for(i=0;i<nC;i++){
-      var cxn=along?(px-sw/2+(i+0.5)*sw/nC):px, czn=along?pz:(pz-sd/2+(i+0.5)*sd/nC);
-      var len=along?sd*0.86:sw*0.86;
-      if(along){
-        B.box(cxn,0.78,czn,0.03,0.72,len,0xd8d8d2,0.9);
-        B.box(cxn,0.78,czn-len/2,0.06,1.55,0.06,0x3a3f44,1.0);
-        B.box(cxn,0.78,czn+len/2,0.06,1.55,0.06,0x3a3f44,1.0);
-        addSolidM(cxn,czn-len/2,0.1,0.1); addSolidM(cxn,czn+len/2,0.1,0.1);
-      }else{
-        B.box(cxn,0.78,czn,len,0.72,0.03,0xd8d8d2,0.9);
-      }
-    }
-    return;
-  }
-  /* 篮球架：长轴两头各一个 */
-  for(i=0;i<2;i++){
-    var sg=i?1:-1;
-    var hx=along?px+sg*(sw/2-0.4):px, hz=along?pz:pz+sg*(sd/2-0.4);
-    var bx=along?-sg*1.2:0, bz=along?0:-sg*1.2;
-    B.box(hx,1.6,hz,0.18,3.2,0.18,0x2f3a44,1.0);
-    B.box(hx+bx*0.5,3.1,hz+bz*0.5,along?1.2:0.12,0.10,along?0.12:1.2,0x2f3a44,1.0);
-    B.box(hx+bx,3.25,hz+bz,along?0.05:1.8,1.05,along?1.8:0.05,0xe8e8e4,1.05);   /* 篮板 */
-    B.box(hx+bx*1.18,2.95,hz+bz*1.18,0.45,0.03,0.45,0xc0502a,1.1);              /* 篮筐 */
-    addSolidM(hx,hz,0.2,0.2);
-  }
-}
-/* 地下车库车道：两侧矮墙 + 一块往下斜的黑坡 + 门头 */
-function garageRamp(B,px,pz,sw,sd){
-  var x0=px-sw/2, x1=px+sw/2;
-  B.box(px,0.45,pz-sd/2+0.15,sw,0.9,0.3,0xb8b2a8,1.0);
-  B.box(px,0.45,pz+sd/2-0.15,sw,0.9,0.3,0xb8b2a8,1.0);
-  B.box(x0+0.15,1.2,pz,0.3,2.4,sd,0xb8b2a8,1.0);
-  var n=10, i;
-  for(i=0;i<n;i++){                                   /* 东高西低 */
-    var t0=i/n, h=-0.05-(1-t0)*2.6;
-    B.box(x0+0.3+(i+0.5)*(sw-0.3)/n,h,pz,(sw-0.3)/n+0.02,0.1,sd-0.6,0x2b3339,1.0);
-    B.box(x0+0.3+(i+0.5)*(sw-0.3)/n,h+0.055,pz,0.10,0.01,sd-0.6,0xc8b24a,1.1);
-  }
-  B.box(x0+1.4,1.3,pz,2.4,2.6,sd-0.6,0x05080a,1.0);   /* 坡底的黑洞 */
-  B.box(x0+3.0,2.8,pz,3.6,0.24,sd+0.4,0xc9c4bb,1.05); /* 入口雨棚 */
-  B.box(x0+3.0,3.3,pz+sd/2+0.25,3.4,0.6,0.08,0x1d3a5a,1.1);   /* 蓝色"地下车库"牌 */
-  B.box(x1-0.4,1.2,pz-sd/2+0.8,0.12,2.4,0.12,0x8a9298,1.0);    /* 道闸 */
-  B.box(x1-0.4,1.0,pz,0.08,0.08,sd-1.6,0xd84a3a,1.1);
-}
-/* 地下车库人行口：一个玻璃顶的楼梯间（以前高度是 0，地面上什么都没有） */
-function garagePed(B,px,pz,sw,sd){
-  var w=Math.min(sw,7.0), d=Math.min(sd,5.0), h=3.0;
-  B.box(px,h/2,pz,w,h,d,0x9a958c,1.0);
-  B.box(px,h+0.12,pz,w+0.4,0.24,d+0.4,0x5a646a,1.0);
-  B.box(px,h-0.5,pz+d/2+0.03,w*0.92,0.8,0.04,0x2a3a44,1.1);   /* 窗带 */
-  B.box(px,1.05,pz+d/2+0.04,1.6,2.1,0.06,0x2a3136,1.0);       /* 门 */
-  B.box(px,2.3,pz+d/2+0.06,1.4,0.24,0.04,0x1d3a5a,1.2);       /* 牌子 */
-  B.box(px+0.45,2.3,pz+d/2+0.09,0.3,0.12,0.02,0x2fae6a,1.8);
-  addSolidM(px,pz,w/2,d/2);
-}
-function buildTree(B, tx, tz, seed, lod){
+/* ---- 树：分段的树干、几根主枝、几团椭球树冠（以前全是方块） ---- */
+function buildTree(K, tx, tz, seed, lod){
   var r=function(k){ return hash2(seed*13+k, k*7+3); };
   var th=2.0+r(17)*1.3;                    /* 分枝高度 2.0–3.3m */
   var lean=(r(23)-0.5)*0.5;
   var lay=[[0x2b3f2e,0x36523a,0x3f5f3f],[0x264a2c,0x2f5733,0x3a6a3c],[0x2f4a32,0x3d5f3e,0x4a7048]][Math.floor(r(11)*3)];
-  var i;
-  for(i=0;i<3;i++){
-    var sy=th*(i+0.5)/3;
-    var w=0.42-i*0.08;
-    B.box(tx+lean*sy*0.30, sy, tz+lean*sy*0.18, w, th/3+0.03, w, 0x3d3227, 0.95+i*0.03);
-  }
-  B.box(tx,0.03,tz,1.1,0.06,1.1,0x6a6458,1.0);              /* 树池 */
+  var i, topX=tx+lean*th*0.30, topZ=tz+lean*th*0.18;
+  K.rod('bark',tx,0,tz,topX,th,topZ,0.22,0.15,lod>0?7:5,0x4a3c2e,1.0);              /* 树干 */
+  K.cyl('bark',tx,0,tz,0.30,0.22,0.25,7,0x4a3c2e,0.95);                              /* 根部 */
+  K.box('concrete',tx,0.04,tz,1.2,0.08,1.2,0x8a847a,1.0);                            /* 树池 */
+  K.g('decal').quad(tx-0.5,tz-0.5,tx+0.5,tz-0.5,tx+0.5,tz+0.5,tx-0.5,tz+0.5,0.081,0x3a2e22);
   var nb=lod>0?4:2;
   for(i=0;i<nb;i++){
     var a=i*(6.283/nb)+r(30+i)*1.1;
-    var len=1.0+r(40+i)*1.0;
-    var up=0.34+r(50+i)*0.36;
-    var sk, segs=lod>0?4:2;
-    for(sk=0;sk<segs;sk++){
-      var t2=(sk+0.5)/segs;
-      var bw=0.18*(1-t2*0.5);
-      B.box(tx+Math.cos(a)*len*t2, th+len*up*t2*0.95, tz+Math.sin(a)*len*t2, bw, bw*1.25, bw, 0x372d23, 0.93+t2*0.06);
-    }
+    var len=1.0+r(40+i)*1.0, up=0.34+r(50+i)*0.36;
+    K.rod('bark',topX,th-0.1,topZ,topX+Math.cos(a)*len,th+len*up,topZ+Math.sin(a)*len,0.10,0.05,5,0x3d3227,0.98);
   }
-  var cw=3.6+r(41)*2.0, nc=lod>1?11:(lod>0?8:5);
+  var cw=3.6+r(41)*2.0, nc=lod>1?8:(lod>0?6:4);
   for(i=0;i<nc;i++){
     var ca=r(60+i)*6.283;
-    var cr=(0.15+r(70+i)*0.55)*cw*0.5;
-    var cy=th+1.0+r(80+i)*2.3;
-    var cs=(0.55+r(90+i)*0.50)*cw*0.46;
-    B.box(tx+Math.cos(ca)*cr, cy, tz+Math.sin(ca)*cr, cs, cs*0.76, cs, lay[i%3], 0.93+r(100+i)*0.16);
+    var cr=(0.10+r(70+i)*0.50)*cw*0.5;
+    var cy=th+1.0+r(80+i)*2.0;
+    var cs=(0.55+r(90+i)*0.45)*cw*0.40;
+    K.blob('leaf',topX+Math.cos(ca)*cr, cy, topZ+Math.sin(ca)*cr, cs, cs*0.78, cs, lay[i%3], 0.93+r(100+i)*0.16, lod>0?7:5, 0.35, seed*7+i);
   }
 }
-function addOutdoorProps(B, BF, x0, y0, x1, y1){
+function addOutdoorProps(K, x0, y0, x1, y1){
   var i, j, q=QUALITY|0;
   /* ---- 草地：整片打底，按 6 米一格做一点深浅 ---- */
-  var gs=6, gx, gz;
+  var gs=6, gx, gz, L=K.g('fgrass');
   for(gx=x0; gx<x1; gx+=gs){
     for(gz=y0; gz<y1; gz+=gs){
       var ex=Math.min(gx+gs,x1), ez=Math.min(gz+gs,y1);
       var hv=hash2((gx*7)|0,(gz*13)|0);
-      OUTX.G.quad(gx,ez, ex,ez, ex,gz, gx,gz, 0.000, shadeHex(hv<0.5?0x45603a:0x4d6a40, 0.86+hv*0.22));
+      L.quad(gx,ez, ex,ez, ex,gz, gx,gz, 0.000, shadeHex(hv<0.5?0x45603a:0x4d6a40, 0.86+hv*0.22));
     }
   }
-  /* ---- 路和楼前铺装：1.2 米一块的方砖，砖缝深一点 ---- */
+  /* ---- 路和楼前铺装：1.2 米一块的方砖（混凝土纹理），砖缝深一点 ---- */
   function pave(r,col){
-    var ax=M(r[0]), az=M(r[1]), bx=M(r[2]), bz=M(r[3]), t=1.2, a, b;
-    OUTX.J.quad(ax,bz, bx,bz, bx,az, ax,az, 0.004, 0x55534e);
+    var ax=M(r[0]), az=M(r[1]), bx=M(r[2]), bz=M(r[3]), t=1.2, a, b, P=K.g('paving');
+    K.g('fjoint').quad(ax,bz, bx,bz, bx,az, ax,az, 0.004, 0x55534e);
     for(a=ax; a<bx-0.05; a+=t){
       for(b=az; b<bz-0.05; b+=t){
         var qa=a+0.04, qb=Math.min(a+t,bx)-0.04, qc=b+0.04, qd=Math.min(b+t,bz)-0.04;
         if(qb<=qa||qd<=qc) continue;
         var sh=0.92+0.12*hash2((a*5)|0,(b*7)|0);
-        BF.quad(qa,qd, qb,qd, qb,qc, qa,qc, 0.008, shadeHex(col,sh));
+        P.quad(qa,qd, qb,qd, qb,qc, qa,qc, 0.008, shadeHex(col,sh));
       }
     }
   }
-  for(i=0;i<ROADS.length;i++) pave(ROADS[i],0x8f8b84);
-  for(i=0;i<OBJ.length;i++){ var ap=apronOf(OBJ[i]); if(ap&&OBJ[i].id!=='garage') pave(ap,0x9a958d); }
+  for(i=0;i<ROADS.length;i++) pave(ROADS[i],0xb0aca4);          /* 混凝土纹理本身会压暗一点，颜色调亮补回来 */
+  for(i=0;i<OBJ.length;i++){ var ap=apronOf(OBJ[i]); if(ap&&OBJ[i].id!=='garage') pave(ap,0xbcb7ae); }
   /* ---- 路缘石：只在路边挨着草地的地方立 ---- */
   function paved(mx,my){
     if(onRoad(mx,my,0)) return true;
@@ -226,8 +126,8 @@ function addOutdoorProps(B, BF, x0, y0, x1, y1){
           if(t1>run0){
             var ax3=E[0]+(E[2]-E[0])*run0, ay3=E[1]+(E[3]-E[1])*run0, bx3=E[0]+(E[2]-E[0])*t1, by3=E[1]+(E[3]-E[1])*t1;
             var cxm=M((ax3+bx3)/2), czm=M((ay3+by3)/2);
-            if(E[4]===0) B.box(cxm,0.07,czm,M(Math.abs(bx3-ax3))+0.15,0.14,0.16,0xb4b0a6,1.0);
-            else B.box(cxm,0.07,czm,0.16,0.14,M(Math.abs(by3-ay3))+0.15,0xb4b0a6,1.0);
+            if(E[4]===0) K.bevel('concrete',cxm,0.07,czm,M(Math.abs(bx3-ax3))+0.15,0.14,0.16,0xb4b0a6,1.0,0.02);
+            else K.bevel('concrete',cxm,0.07,czm,0.16,0.14,M(Math.abs(by3-ay3))+0.15,0xb4b0a6,1.0,0.02);
           }
           run0=-1;
         }
@@ -235,24 +135,27 @@ function addOutdoorProps(B, BF, x0, y0, x1, y1){
     }
   }
 
-  /* ---- 花园：雕塑 + 校训牌（都登记成实心，以前能直接穿过去） ---- */
+  /* ---- 花园：一座不锈钢雕塑（几根斜杆托着一个环）+ 校训牌 ---- */
   (function(){
     var gx=M(535), gz=M(1040);
-    B.box(gx,0.30,gz,24.0,0.60,3.0,0xb8b2a8,1.0);
+    K.bevel('stone',gx,0.30,gz,24.0,0.60,3.0,0xb8b2a8,1.0,0.06);
     addSolidM(gx,gz,12.0,1.5);
     var sx3=gx-12.0;
-    B.box(sx3,1.1,gz,0.30,2.2,0.30,0x8e9498,1.05);
-    B.box(sx3+0.8,1.95,gz,2.0,0.24,0.24,0x8e9498,1.05);
-    B.box(sx3-0.8,1.75,gz,1.8,0.22,0.22,0x9aa0a4,1.0);
-    B.box(sx3,0.30,gz,2.8,0.42,2.8,0xa8a298,1.0);
+    K.bevel('stone',sx3,0.30,gz,2.8,0.42,2.8,0xa8a298,1.0,0.05);
+    K.rod('metal',sx3,0.5,gz,sx3+0.4,3.4,gz+0.2,0.12,0.06,8,0x9aa0a4,1.1);
+    K.rod('metal',sx3,0.5,gz,sx3-0.6,2.6,gz-0.3,0.10,0.05,8,0x9aa0a4,1.05);
+    var k; for(k=0;k<16;k++){ var a=k/16*6.283, b=(k+1)/16*6.283;
+      K.rod('metal',sx3+0.4+Math.cos(a)*0.9,3.4+Math.sin(a)*0.9,gz+0.2,sx3+0.4+Math.cos(b)*0.9,3.4+Math.sin(b)*0.9,gz+0.2,0.07,0.07,6,0xb8c0c4,1.15); }
     addSolidM(sx3,gz,1.4,1.4);
+    K.bevel('stone',gx,1.35,gz+1.6,11.0,1.9,0.34,0xcfc9be,1.0,0.04);                 /* 校训牌的底板 */
+    K.bevel('stone',gx,0.17,gz+1.6,11.6,0.34,0.9,0xa8a298,1.0,0.04);
+    K.box('metal',gx,0.42,gz+1.6,11.4,0.10,0.16,0x9aa0a4,1.0);
     addSolidM(gx,gz+1.6,5.8,0.5);
-    /* 花园里的小径：十字 */
-    BF.quad(M(400),M(1036), M(670),M(1036), M(670),M(1030), M(400),M(1030), 0.014, 0x9a948a);
-    BF.quad(M(532),M(1078), M(538),M(1078), M(538),M(1000), M(532),M(1000), 0.014, 0x9a948a);
+    K.g('fpave').quad(M(400),M(1036), M(670),M(1036), M(670),M(1030), M(400),M(1030), 0.014, 0x9a948a);
+    K.g('fpave').quad(M(532),M(1078), M(538),M(1078), M(538),M(1000), M(532),M(1000), 0.014, 0x9a948a);
   })();
 
-  /* ---- 花坛：只放在草地上 ---- */
+  /* ---- 花坛：砖砌一圈，土，一丛丛花 ---- */
   var beds=[[440,1016],[630,1016],[440,1062],[630,1062],[462,1008],[608,1008],[740,560],[740,760],[330,560],[660,140],[440,145]];
   var flowerCols=[0xb24a4a,0xc8a24a,0xa85a8a,0xd8d4e8,0xc86a3a];
   for(i=0;i<beds.length;i++){
@@ -260,13 +163,16 @@ function addOutdoorProps(B, BF, x0, y0, x1, y1){
     if(!inObj(fmx,fmy,0,true)&&!outFree(fmx,fmy,4,3)&&!(inRect(fmx,fmy,[400,1000,670,1078],0))) continue;
     if(onRoad(fmx,fmy,3)) continue;
     var fx0=M(fmx), fz0=M(fmy);
-    B.box(fx0,0.20,fz0,2.8,0.40,1.4,0x8a8478,1.0);
-    B.box(fx0,0.42,fz0,2.5,0.06,1.15,0x3a2b22,1.0);
+    K.box('brick',fx0,0.20,fz0-0.65,2.8,0.40,0.12,0x8a8478,1.0);
+    K.box('brick',fx0,0.20,fz0+0.65,2.8,0.40,0.12,0x8a8478,1.0);
+    K.box('brick',fx0-1.34,0.20,fz0,0.12,0.40,1.18,0x8a8478,1.0);
+    K.box('brick',fx0+1.34,0.20,fz0,0.12,0.40,1.18,0x8a8478,1.0);
+    K.box('concrete',fx0,0.38,fz0,2.56,0.04,1.18,0x3a2b22,1.0);                        /* 土 */
     var fj;
     for(fj=0;fj<(q>0?14:7);fj++){
       var fxx=fx0-1.1+(fj%7)*0.36, fzz=fz0+(fj<7?-0.25:0.25)+(hash2(i,fj)-0.5)*0.12;
-      B.box(fxx,0.52,fzz,0.13,0.12,0.13,flowerCols[(i+fj)%5],1.05);
-      B.box(fxx,0.46,fzz,0.06,0.10,0.06,0x4a6a3a,1.0);
+      K.rod('leaf',fxx,0.40,fzz,fxx,0.52,fzz,0.03,0.02,4,0x4a6a3a,1.0);
+      K.blob('leaf',fxx,0.56,fzz,0.09,0.06,0.09,flowerCols[(i+fj)%5],1.05,5,0.4,i*13+fj);
     }
     addSolidM(fx0,fz0,1.4,0.7);
   }
@@ -274,33 +180,33 @@ function addOutdoorProps(B, BF, x0, y0, x1, y1){
   /* ---- 旗杆：北门广场东侧 ---- */
   (function(){
     var fx=M(538), fz=M(160);
-    B.box(fx,0.15,fz,2.2,0.30,2.2,0xb2ada4,1.0);
-    B.box(fx,0.38,fz,1.4,0.16,1.4,0xc2bdb4,1.0);
-    B.box(fx,5.2,fz,0.16,10.4,0.16,0xb8bcbe,1.06);
-    B.box(fx+0.8,9.6,fz,1.6,1.0,0.03,0xc0362c,1.0);
+    K.bevel('stone',fx,0.15,fz,2.2,0.30,2.2,0xb2ada4,1.0,0.04);
+    K.bevel('stone',fx,0.38,fz,1.4,0.16,1.4,0xc2bdb4,1.0,0.03);
+    K.cyl('metal',fx,0.46,fz,0.09,0.05,10.0,8,0xb8bcbe,1.06);
+    K.blob('metal',fx,10.5,fz,0.10,0.10,0.10,0xc8a24a,1.2,6);
+    K.box('fabric',fx+0.8,9.6,fz,1.6,1.0,0.02,0xc0362c,1.0);
+    K.rod('metal',fx+0.06,0.5,fz,fx+0.06,10.4,fz,0.006,0.006,3,0xd8d8d0);           /* 绳子 */
     addSolidM(fx,fz,1.1,1.1);
   })();
 
-  /* ---- 宣传栏：教学楼前、行政楼东侧 ---- */
-  function board(mx,my,rotZ){
+  /* ---- 宣传栏 ---- */
+  function board(mx,my){
     var bx=M(mx), bz=M(my);
-    if(rotZ){
-      B.box(bx,1.35,bz,0.12,1.5,4.2,0x2a3238,1.0);
-      B.box(bx-0.07,1.35,bz,0.03,1.3,4.0,0xd8d2c4,1.0);
-      B.box(bx,2.20,bz,0.5,0.12,4.5,0x8b3a2e,1.0);
-      B.box(bx,0.30,bz-2.0,0.10,0.6,0.10,0x2a3238,1.0); B.box(bx,0.30,bz+2.0,0.10,0.6,0.10,0x2a3238,1.0);
-      addSolidM(bx,bz,0.2,2.1);
-    }else{
-      B.box(bx,1.35,bz,4.2,1.5,0.12,0x2a3238,1.0);
-      B.box(bx,1.35,bz-0.07,4.0,1.3,0.03,0xd8d2c4,1.0);
-      B.box(bx,2.20,bz,4.5,0.12,0.5,0x8b3a2e,1.0);
-      addSolidM(bx,bz,2.1,0.2);
-    }
+    K.frame(bx,bz,Math.PI/2);
+    K.rod('metal',-2.0,0,0,-2.0,2.3,0,0.05,0.05,6,0x2a3238);
+    K.rod('metal', 2.0,0,0, 2.0,2.3,0,0.05,0.05,6,0x2a3238);
+    K.bevel('metal',0,1.35,0,4.1,1.5,0.10,0x2a3238,1.0,0.02);
+    K.box('paper',0,1.35,0.06,3.9,1.3,0.01,0xd8d2c4,1.0);
+    var k; for(k=0;k<6;k++) K.box('paper',-1.6+k*0.64,1.35+(hash2(k,mx)-0.5)*0.4,0.067,0.52,0.70,0.004,[0xe8e4dc,0xc8d8e0,0xd8c8a8][k%3],1);
+    K.box('glass',0,1.35,0.08,3.9,1.3,0.01,0xb8c8d0,1.1);
+    K.bevel('plastic',0,2.20,0,4.5,0.14,0.5,0x8b3a2e,1.0,0.03);
+    K.unframe();
+    addSolidM(bx,bz,0.2,2.1);
   }
-  board(686,560,true);
-  board(686,880,true);
+  board(686,560);
+  board(686,880);
 
-  /* ---- 路灯：沿路每隔一段一盏，灯头单独一个自发光网格 ---- */
+  /* ---- 路灯：杆子 + 弯臂 + 灯头（灯头单独一种自发光材质） ---- */
   var lampSeen=[];
   function lampOK(mx,my){
     for(var k=0;k<lampSeen.length;k++) if(dist2(mx,my,lampSeen[k][0],lampSeen[k][1])<70*70) return false;
@@ -312,35 +218,42 @@ function addOutdoorProps(B, BF, x0, y0, x1, y1){
     for(t3=L0+20; t3<L1-10; t3+=st2){
       var cand=horiz?[[t3,rr[1]-5],[t3,rr[3]+5]]:[[rr[0]-5,t3],[rr[2]+5,t3]];
       for(j=0;j<2;j++){
-        var lmx=cand[(j+i)%2][0], lmy=cand[(j+i)%2][1];
+        var ci=(j+i)%2, lmx=cand[ci][0], lmy=cand[ci][1];
         if(!lampOK(lmx,lmy)) continue;
         lampSeen.push([lmx,lmy]);
         var lx=M(lmx), lz=M(lmy);
-        B.box(lx,0.20,lz,0.36,0.40,0.36,0x3a4146,1.0);
-        B.box(lx,2.45,lz,0.13,4.9,0.13,0x252c31,1.0);
-        B.box(lx,4.86,lz,0.62,0.12,0.36,0x2a3238,1.0);
-        OUTX.L.box(lx,4.76,lz,0.50,0.08,0.26,0xffffff,1.0);
-        OUT_LAMPS.push({x:lx,y:4.76,z:lz});
+        var dx=horiz?0:(ci?-1:1), dz=horiz?(ci?-1:1):0;            /* 灯臂伸向路面 */
+        K.cyl('metal',lx,0,lz,0.16,0.14,0.5,8,0x3a4146,1.0);
+        K.cyl('metal',lx,0.5,lz,0.08,0.05,4.4,8,0x252c31,1.0);
+        K.rod('metal',lx,4.85,lz,lx+dx*0.9,4.95,lz+dz*0.9,0.035,0.03,5,0x252c31);
+        var hx=lx+dx*0.95, hz=lz+dz*0.95;
+        K.bevel('metal',hx,4.90,hz,0.62,0.12,0.36,0x2a3238,1.0,0.03);
+        K.g('lamp').box(hx,4.82,hz,0.50,0.04,0.26,0xffffff,1.0);
+        OUT_LAMPS.push({x:hx,y:4.82,z:hz});
         addSolidM(lx,lz,0.2,0.2);
         break;
       }
     }
   }
 
-  /* ---- 长椅 + 垃圾桶 ---- */
+  /* ---- 长椅（板条 + 铸铁腿）+ 圆形垃圾桶 ---- */
   var benchSpots=[[420,1020],[650,1020],[420,1070],[650,1070],[730,300],[730,640],[730,960],[380,700],[340,250],[600,1210]];
   for(i=0;i<benchSpots.length;i++){
     var bmx=benchSpots[i][0], bmy=benchSpots[i][1];
     var inGarden=inRect(bmx,bmy,[400,1000,670,1078],0);
     if(!inGarden&&!outFree(bmx,bmy,3,1)) continue;
-    var px2=M(bmx), pz2=M(bmy);
-    B.box(px2,0.44,pz2,2.0,0.09,0.52,0x6a4a2e,1.0);
-    B.box(px2,0.72,pz2-0.22,2.0,0.42,0.08,0x6a4a2e,0.94);
-    B.box(px2-0.85,0.22,pz2,0.09,0.44,0.46,0x2a2622,0.9);
-    B.box(px2+0.85,0.22,pz2,0.09,0.44,0.46,0x2a2622,0.9);
+    var px2=M(bmx), pz2=M(bmy), sl;
+    for(sl=0;sl<4;sl++) K.bevel('wood',px2,0.44,pz2-0.18+sl*0.12,2.0,0.04,0.09,0x7a5434,1.0,0.01);
+    for(sl=0;sl<3;sl++) K.bevel('wood',px2,0.62+sl*0.12,pz2-0.30-sl*0.02,2.0,0.08,0.03,0x7a5434,0.95,0.01);
+    var lg;
+    for(lg=-1;lg<=1;lg+=2){
+      K.box('metal',px2+lg*0.85,0.22,pz2,0.06,0.44,0.46,0x2a2622,0.9);
+      K.rod('metal',px2+lg*0.85,0.42,pz2-0.22,px2+lg*0.85,0.90,pz2-0.34,0.03,0.03,5,0x2a2622);
+    }
     addSolidM(px2,pz2,1.0,0.3);
-    B.box(px2+1.5,0.44,pz2,0.55,0.88,0.55,0x2f5a3a,1.0);
-    B.box(px2+1.5,0.90,pz2,0.60,0.06,0.60,0x272e33,1.0);
+    K.cyl('plastic',px2+1.5,0,pz2,0.28,0.30,0.88,10,0x2f5a3a,1.0);
+    K.cyl('metal',px2+1.5,0.88,pz2,0.31,0.26,0.08,10,0x272e33,1.0);
+    K.box('dark',px2+1.5,0.70,pz2+0.29,0.18,0.12,0.02,0x111418,1);
     addSolidM(px2+1.5,pz2,0.3,0.3);
   }
 
@@ -348,8 +261,8 @@ function addOutdoorProps(B, BF, x0, y0, x1, y1){
   function hedgeSeg(ax,az,bx,bz){
     var hx=(ax+bx)/2, hz=(az+bz)/2;
     var hw=Math.max(0.7,Math.abs(bx-ax)), hd=Math.max(0.7,Math.abs(bz-az));
-    B.box(hx,0.42,hz,hw,0.84,hd,0x2c4a30,0.96);
-    B.box(hx,0.88,hz,hw*0.96,0.10,hd*0.96,0x385a38,1.06);
+    K.bevel('leaf',hx,0.42,hz,hw,0.84,hd,0x2c4a30,0.96,0.12);
+    K.bevel('leaf',hx,0.86,hz,hw*0.94,0.10,hd*0.94,0x385a38,1.06,0.04);
     addSolidM(hx,hz,hw/2,hd/2);
   }
   function hedgeLine(mxa,mya,mxb,myb){
@@ -381,9 +294,7 @@ function addOutdoorProps(B, BF, x0, y0, x1, y1){
     var A0=hz2?r2[0]:r2[1], A1=hz2?r2[2]:r2[3], t5;
     for(t5=A0+14; t5<A1-8 && trees.length<maxTrees*0.65; t5+=34){
       var cs2=hz2?[[t5,r2[1]-12],[t5,r2[3]+12]]:[[r2[0]-12,t5],[r2[2]+12,t5]];
-      for(j=0;j<2;j++){
-        if(treeOK(cs2[j][0],cs2[j][1])) trees.push(cs2[j]);
-      }
+      for(j=0;j<2;j++) if(treeOK(cs2[j][0],cs2[j][1])) trees.push(cs2[j]);
     }
   }
   for(i=0;i<900&&trees.length<maxTrees;i++){
@@ -393,7 +304,7 @@ function addOutdoorProps(B, BF, x0, y0, x1, y1){
   }
   for(i=0;i<trees.length;i++){
     var tx=M(trees[i][0]), tz=M(trees[i][1]);
-    buildTree(B,tx,tz,i*7+3,lod);
+    buildTree(K,tx,tz,i*7+3,lod);
     addSolidM(tx,tz,0.3,0.3);
   }
   OUTX.treeN=trees.length;
@@ -407,8 +318,7 @@ function addOutdoorProps(B, BF, x0, y0, x1, y1){
     var stx=M(smx), stz=M(smy), si;
     for(si=0;si<3;si++){
       var sc2=0.55+hash2(i*3+si,149)*0.45;
-      B.box(stx+(si-1)*0.42, sc2*0.5, stz+(si%2?0.30:-0.26),
-            sc2*1.15, sc2*0.95, sc2*1.15, si%2?0x2a4a2e:0x315a34, 0.95+si*0.04);
+      K.blob('leaf',stx+(si-1)*0.42, sc2*0.45, stz+(si%2?0.30:-0.26), sc2*0.62, sc2*0.50, sc2*0.62, si%2?0x2a4a2e:0x315a34, 0.95+si*0.04, 6, 0.35, i*3+si);
     }
     addSolidM(stx,stz,0.8,0.6);
     made++;
