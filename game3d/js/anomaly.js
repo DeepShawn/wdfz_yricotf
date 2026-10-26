@@ -268,27 +268,13 @@ function anHurt(msg,loss,opt){
   var k=(S.diff==='hard')?1.25:0.9;
   S.san=Math.max(0,S.san-loss*k);
   GLR.hurt=Math.max(GLR.hurt||0,0.65);
-  GLR.flash=Math.max(GLR.flash||0,0.25);
-  if(opt.face) try{ scareFace(); }catch(e){}
-  try{ SFX.sting&&SFX.sting(); }catch(e){}
+  if(!opt.quiet){                           /* quiet：不闪白、不加刺耳的音效，只留画面暗下去那一下 */
+    GLR.flash=Math.max(GLR.flash||0,0.25);
+    try{ SFX.sting&&SFX.sting(); }catch(e){}
+  }
   os(msg,4.4);
   if(S.san<=0&&!S.dead){ kill('你一直撑着的那根弦，断了。','vignette'); return; }
   if(!opt.keep) anEnd();
-}
-/* 一张苍白的脸贴到镜头前 0.4 秒 */
-function scareFace(){
-  if(GLR.scareM){ try{ GLR.cam.remove(GLR.scareM); }catch(e){} }
-  var g=new THREE.Group();
-  var skin=new THREE.MeshBasicMaterial({color:0xc8c0b2,fog:false,depthTest:false});
-  var dark=new THREE.MeshBasicMaterial({color:0x050607,fog:false,depthTest:false});
-  function bx(m,w,h,d,x,y,z){ var o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); o.position.set(x,y,z); o.renderOrder=1000; g.add(o); }
-  bx(skin,0.34,0.46,0.02,0,0,0);
-  bx(dark,0.08,0.05,0.01,-0.08,0.06,0.012);
-  bx(dark,0.08,0.05,0.01, 0.08,0.06,0.012);
-  bx(dark,0.14,0.10,0.01,0,-0.12,0.012);        /* 嘴张着 */
-  g.position.set(0,-0.02,-0.42);
-  GLR.cam.add(g); GLR.scareM=g;
-  setTimeout(function(){ try{ GLR.cam.remove(g); }catch(e){} if(GLR.scareM===g) GLR.scareM=null; },380);
 }
 /* 能躲雨的地方：屋里、柱廊下、车棚、连廊下 */
 function underCover(){
@@ -337,7 +323,7 @@ function anTick(dt){
         } else if(d.asked&&d.chosen===null&&AN.t>11){ d.chosen='no'; UI.closeChoice(); }
       }else if(d.chosen==='yes'){
         AN.acc+=dt;
-        if(AN.acc>0.5) anHurt('我回头了。它的脸离我只有一寸——没有五官，只有一层湿透的皮。下一秒，什么都没有了。肩膀上还是凉的。',26,{face:1});
+        if(AN.acc>0.5) anHurt('我回头了。它的脸离我只有一寸——没有五官，只有一层湿透的皮。下一秒，什么都没有了。肩膀上还是凉的。',26,{quiet:1});
       }else{
         AN.acc+=dt;
         if(AN.acc>=7.8){ S.san=Math.min(100,S.san+6); addClue('turn'); os('我：那只手慢慢松开了。我一直没有回头。',3.4); anEnd(); }

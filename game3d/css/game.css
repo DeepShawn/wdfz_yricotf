@@ -220,6 +220,11 @@ body.touch .bc{bottom:calc(178px + env(safe-area-inset-bottom,0px))}
 #tRun{right:calc(132px + env(safe-area-inset-right,0px));bottom:calc(44px + env(safe-area-inset-bottom,0px));width:70px;height:70px}
 #tAct{right:calc(26px + env(safe-area-inset-right,0px));bottom:calc(32px + env(safe-area-inset-bottom,0px));width:92px;height:92px;font-size:15px;
   background:rgba(20,48,38,.55);border-color:rgba(130,200,170,.5)}
+/* 手机上没有 Esc：右上角一个暂停键，时间栏往下让一行 */
+#tPause{right:calc(14px + env(safe-area-inset-right,0px));top:calc(12px + env(safe-area-inset-top,0px));width:46px;height:46px}
+#tPause::before,#tPause::after{content:'';width:5px;height:16px;margin:0 3px;border-radius:1px;background:#a9d8c2}
+#tPause:active{background:rgba(120,200,170,.30);border-color:#79c8a4}
+body.touch .tr{top:calc(68px + env(safe-area-inset-top,0px))}
 #tRun.held{background:rgba(120,200,170,.34);border-color:#79c8a4;color:#eafff5;box-shadow:0 0 14px rgba(120,220,180,.35)}
 #flash{position:fixed;inset:0;z-index:8;background:#000;pointer-events:none;opacity:0;transition:opacity .5s}
 #fade{position:fixed;inset:0;z-index:40;background:#05080a;pointer-events:none;opacity:0;transition:opacity .18s ease}
@@ -234,6 +239,7 @@ body.touch .bc{bottom:calc(178px + env(safe-area-inset-bottom,0px))}
 .hslot .nm{position:absolute;bottom:1px;left:0;right:0;font-size:8px;opacity:.55;letter-spacing:0;
   text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #sub{z-index:46}
+body.paused #sub{visibility:hidden}
 #bag .s{transition:border-color .15s ease,background .15s ease}
 #sub{transition:opacity .22s ease}
 #cross{position:fixed;left:50%;top:50%;width:4px;height:4px;margin:-2px 0 0 -2px;border-radius:50%;

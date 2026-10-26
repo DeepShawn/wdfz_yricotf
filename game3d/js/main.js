@@ -281,7 +281,7 @@ function freshState(diff){
   AN.id=null; AN.active=false; AN.next=(S.diff==='hard')?40:60; AN.rained=false; AN.cool={}; AN.lastBig=false; AN.t=0; AN.acc=0;
   AN.pre=null; AN.preNext=0; AN.locked=false; AN.lockWait=0;
   ROAM.on=false;
-  ENTS=[]; PAUSE.on=false;
+  ENTS=[]; PAUSE.on=false; document.body.classList.remove('paused');
   try{ NC.done=false; ncClear(); }catch(e){}
   try{ skipClear(); }catch(e){}
   try{ anfxClear(); }catch(e){}
@@ -359,10 +359,11 @@ var Game={
     }
     var el=document.getElementById('pause');
     el.style.display=PAUSE.on?'flex':'none';
+    document.body.classList.toggle('paused',PAUSE.on);   /* 字幕层级比面板高，暂停时先藏起来 */
     if(PAUSE.on&&document.exitPointerLock) document.exitPointerLock();
   },
   resume:function(){
-    PAUSE.on=false;
+    PAUSE.on=false; document.body.classList.remove('paused');
     var e1=document.getElementById('pause'); if(e1) e1.style.display='none';
     var e2=document.getElementById('set');   if(e2) e2.style.display='none';
     try{ UI.openPanel=null; }catch(e){}

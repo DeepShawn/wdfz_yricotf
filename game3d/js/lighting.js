@@ -12,7 +12,7 @@ function sunAt(h){
   var span=SUN_SET-SUN_RISE;
   var e=Math.sin(PI*(h-SUN_RISE)/span);            /* 太阳高度：白天 0..1，夜里为负 */
   var day=smooth01(-0.10,0.32,e);                  /* 0 = 夜，1 = 白天 */
-  var gold=smooth01(-0.24,0.0,e)*(1-smooth01(0.06,0.42,e));   /* 地平线附近的霞光 */
+  var gold=smooth01(-0.24,0.0,e)*(1-smooth01(0.06,0.42,e))*0.55;   /* 霞光：隔着云，只透出一点暗红 */
   var t=clamp((h-SUN_RISE)/span,0,1), az=PI*t;
   return { e:e, day:day, gold:gold, night:1-day,
     dir:[Math.cos(az), 0.10+Math.max(0,e)*1.2, 0.55*Math.sin(az)] };   /* 东升（+x）→ 南 → 西落 */
@@ -24,8 +24,9 @@ function skyBucket(){
   return 'night';
 }
 var SKY_NIGHT=['#03060a','#070c11','#0c141a','#111b22'];
-var SKY_DAY  =['#3a6c9e','#5d8ebd','#92b4d1','#c4d5df'];
-var SKY_GOLD =['#262f48','#5d5168','#b8735a','#e09a6c'];
+/* 白天是阴天：一整块压低的铅灰云层，顶上略深，地平线发白发灰，几乎看不出蓝 */
+var SKY_DAY  =['#4f5961','#66707a','#848c93','#9aa0a3'];
+var SKY_GOLD =['#2a2f3c','#4c4852','#7d6559','#94776a'];
 function hex2rgb(h){
   return [parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)];
 }
@@ -99,12 +100,12 @@ function lightState(){
     var g=(S.room==='garage1');
     st.amb = g?0.06:(0.15+0.22*day);
     st.hemi= g?0.04:(0.08+0.17*day);
-    st.dir = g?0.03:(0.05+0.28*day);
+    st.dir = g?0.03:(0.05+0.20*day);
     st.ptK = g?1:(0.42+0.58*day);            /* 夜里的灯还亮着，只是暗、会闪 */
   }else{
-    st.amb = 0.07+0.24*day;
-    st.hemi= 0.10+0.42*day;
-    st.dir = day>0.02 ? (0.16+0.86*day*(1-0.30*sun.gold)) : 0.15;
+    st.amb = 0.07+0.22*day;
+    st.hemi= 0.10+0.40*day;
+    st.dir = day>0.02 ? (0.15+0.42*day) : 0.15;   /* 云层后面的太阳：光是散的，影子很淡 */
     st.ptK = 1;
   }
   return st;
@@ -119,13 +120,13 @@ function updateLighting(){
   GLR.hemi.intensity=s.hemi*(1-0.30*oc);
   GLR.moon.intensity=s.dir*(1-0.70*oc);
   /* 颜色：白天偏暖白，霞光橙，夜里月光偏蓝 */
-  var sunCol=mixRGB([1.0,0.95,0.86],[1.0,0.62,0.38],sun.gold);
+  var sunCol=mixRGB([0.86,0.88,0.90],[0.92,0.66,0.50],sun.gold);    /* 阴天的光偏冷、发灰 */
   var dc=mixRGB([0.55,0.66,0.86],sunCol,smooth01(0.0,0.35,s.day));
   GLR.moon.color.setRGB(dc[0],dc[1],dc[2]);
-  var hs=mixRGB([0.16,0.21,0.30],[0.77,0.85,0.93],s.day), hg=mixRGB([0.05,0.05,0.06],[0.43,0.40,0.32],s.day);
+  var hs=mixRGB([0.16,0.21,0.30],[0.70,0.74,0.78],s.day), hg=mixRGB([0.05,0.05,0.06],[0.34,0.34,0.31],s.day);
   hs=mixRGB(hs,[0.86,0.62,0.50],sun.gold*0.5);
   GLR.hemi.color.setRGB(hs[0],hs[1],hs[2]); GLR.hemi.groundColor.setRGB(hg[0],hg[1],hg[2]);
-  var ac=mixRGB([0.36,0.40,0.50],[0.50,0.49,0.47],s.day);
+  var ac=mixRGB([0.36,0.40,0.50],[0.46,0.48,0.50],s.day);
   GLR.amb.color.setRGB(ac[0],ac[1],ac[2]);
   if(s.day>0.02&&!s.indoor){
     GLR.moon.position.set(sun.dir[0]*16, sun.dir[1]*16, sun.dir[2]*16);
@@ -139,7 +140,7 @@ function updateLighting(){
       var hz=skyRGB(hourNow())[3];
       var fk=0.86;
       var fr=hz[0]/255*fk, fgc=hz[1]/255*fk, fb=hz[2]/255*fk;
-      var dens=0.030+(0.0068-0.030)*s.day;
+      var dens=0.030+(0.0115-0.030)*s.day;    /* 白天也有一层潮气，远处的楼发灰 */
       if(AN&&AN.active&&AN.id==='rain'){ dens+=0.030; fr=fr*0.6+0.09; fgc=fgc*0.6+0.10; fb=fb*0.6+0.12; }
       if(S.mode==='in') dens*=1.4;            /* 天台：雾近一点，楼底下看不清 */
       fog.color.setRGB(fr,fgc,fb,THREE.SRGBColorSpace);

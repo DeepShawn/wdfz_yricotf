@@ -59,7 +59,7 @@ function initInput(){
   var lookId=-1;
   function endLook(){ LOOKDRAG.on=false; lookId=-1; }
   window.addEventListener('pointerdown',function(e){
-    if(e.target.closest && e.target.closest('button,.hslot,#stick,#tRun,#tAct,.close,#tcol')) return;
+    if(e.target.closest && e.target.closest('button,.hslot,#stick,#tRun,#tAct,#tPause,.close,#tcol')) return;
     if(document.pointerLockElement===cv) return;
     if(UI.anyOpen()||PAUSE.on||S.dead) return;
     if(S.screen==='play'&&S.mode){ LOOKDRAG.on=true; LOOKDRAG.x=e.clientX; LOOKDRAG.y=e.clientY; lookId=e.pointerId; }
@@ -125,6 +125,12 @@ function initInput(){
     });
     var ta=document.getElementById('tAct');
     ta.addEventListener('pointerdown',function(e){ tryInteract(); e.stopPropagation(); });
+    var tp=document.getElementById('tPause');
+    if(tp) tp.addEventListener('pointerdown',function(e){
+      e.stopPropagation(); if(e.cancelable) e.preventDefault();
+      TOUCH.active=false; TOUCH.dx=TOUCH.dy=0; LOOKDRAG.on=false;
+      if(!PAUSE.on) Game.pauseToggle();
+    });
   }
   document.addEventListener('pointerlockchange',function(){
     LOOKDRAG.on=false;
