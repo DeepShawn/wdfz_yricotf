@@ -1,0 +1,250 @@
+/* 里世界 3D · 字幕、面板、背包、地图 */
+'use strict';
+
+var DLG={open:false,timer:0};
+var PAUSE={on:false};
+
+function os(msg,dur){
+  var el=document.getElementById('sub');
+  el.textContent=msg; el.style.display='block';
+  el.style.opacity='1';
+  DLG.open=true; DLG.timer=(dur||3.2)*(typeof SUB_MULT!=='undefined'?SUB_MULT:1);
+}
+function toast(msg){
+  var el=document.getElementById('toast');
+  el.textContent=msg; el.style.opacity='1';
+  clearTimeout(el._t); el._t=setTimeout(function(){ el.style.opacity='0'; },1500);
+}
+function updateDialog(dt){
+  if(DLG.open && !UI.anyOpen() && !PAUSE.on){
+    DLG.timer-=dt;
+    if(DLG.timer<=0){ DLG.open=false; var _e=document.getElementById('sub'); _e.style.opacity='0'; setTimeout(function(){ if(!DLG.open) _e.style.display='none'; },240); }
+  }
+}
+
+var UI={ bagDirty:true, spotsDirty:true, openPanel:null, chooseOpen:false };
+
+UI.anyOpen=function(){ return !!UI.openPanel||UI.chooseOpen; };
+UI.open=function(id){
+  if(UI.openPanel&&UI.openPanel!==id) UI.close(UI.openPanel);
+  var el=document.getElementById(id);
+  if(!el) return;
+  el.style.display=(id==='think'||id==='pause'||id==='bag'||id==='note')?'block':'flex';
+  UI.openPanel=id;
+  if(id==='bag') UI.renderBag();
+  if(id==='note') UI.renderNote();
+  if(id==='think') UI.renderThink();
+  if(id==='mapv') UI.renderMap();
+  if(document.exitPointerLock) document.exitPointerLock();
+};
+UI.close=function(id){
+  var el=document.getElementById(id);
+  if(el) el.style.display='none';
+  if(UI.openPanel===id) UI.openPanel=null;
+};
+UI.toggle=function(id){
+  if(S.screen!=='play'||S.dead) return;
+  if(UI.openPanel===id) UI.close(id); else UI.open(id);
+};
+UI.choice=function(text,opts){
+  var el=document.getElementById('choices');
+  el.innerHTML='';
+  var t=document.createElement('div');
+  t.style.cssText='font-size:14px;text-align:center;margin-bottom:6px;opacity:.9;line-height:1.9';
+  t.textContent=text;
+  el.appendChild(t);
+  for(var i=0;i<opts.length;i++){
+    (function(o){
+      var b=document.createElement('button');
+      b.textContent=o.label;
+      b.onclick=function(){ UI.chooseOpen=false; el.style.display='none'; o.fn(); };
+      el.appendChild(b);
+    })(opts[i]);
+  }
+  el.style.display='flex';
+  UI.chooseOpen=true;
+};
+UI.closeChoice=function(){
+  UI.chooseOpen=false;
+  var el=document.getElementById('choices');
+  el.style.display='none';
+};
+var BAGTAP={i:-1,t:0};
+function bagUse(i){
+  var now=Date.now();
+  var dbl=(BAGTAP.i===i && now-BAGTAP.t<340);
+  S.bagSel=i;
+  var id=S.bag[i];
+  if(!id){ BAGTAP.i=-1; UI.renderBag(); return; }
+  if(dbl){ BAGTAP.i=-1; useItem(id); }
+  else { BAGTAP.i=i; BAGTAP.t=now; }
+  UI.renderBag();
+}
+function hotToggle(slot,i){
+  var id=S.bag[i];
+  if(!id) return;
+  if(S.hot[slot]===id){ S.hot[slot]=null; toast('快捷栏 '+(slot+1)+'：取下「'+ITEMS[id].n+'」'); }
+  else{ S.hot[slot]=id; toast('「'+ITEMS[id].n+'」→ 快捷栏 '+(slot+1)+(slot?'（按 2）':'（按 1）')); }
+  try{ SFX.click(); }catch(e){}
+  var el=document.getElementById('hot'); if(el) el._sig='';
+  UI.renderHot(); UI.renderBag();
+}
+function bagDescAt(i){
+  var id=S.bag[i];
+  if(!id) return '第 '+(i+1)+' 格是空的。';
+  var on=[];
+  if(S.hot[0]===id) on.push('①');
+  if(S.hot[1]===id) on.push('②');
+  var hint=on.length ? ('已在快捷栏 '+on.join(' ') + '　·　' + (USE.brollyShield&&id==='brolly'?'已撑开':'按 ' + (S.hot[0]===id?'1':'2') + ' 使用'))
+                     : '点右上角 ① ② 放进快捷栏';
+  return ITEMS[id].n+'：'+ITEMS[id].d+'\n双击（或再点一次）使用　·　'+hint;
+}
+UI.renderBag=function(){
+  var g=document.getElementById('bags');
+  if(!g) return;
+  g.innerHTML='';
+  for(var i=0;i<8;i++){
+    (function(i){
+      var d=document.createElement('div');
+      d.className='s'+(S.bagSel===i?' on':'');
+      d.innerHTML=S.bag[i]?
+        ('<span class="item"><span class="ic" style="color:'+itemColor(S.bag[i])+'">'+itemGlyph(S.bag[i])+'</span>'+
+         '<span class="nm">'+ITEMS[S.bag[i]].n+'</span></span>'):'—';
+      var hd=document.createElement('span'); hd.className='hb';
+      if(S.bag[i]){
+        var dr=document.createElement('b');
+        dr.className='dr'; dr.textContent='丢';
+        dr.onclick=function(ev){ if(ev&&ev.stopPropagation) ev.stopPropagation(); dropAt(i); return false; };
+        hd.appendChild(dr);
+      }
+      for(var s=0;s<2;s++){
+        (function(s){
+          var b=document.createElement('b');
+          var has=!!(S.bag[i]&&S.hot[s]===S.bag[i]);
+          b.className=has?'has':'';
+          b.textContent=(s?'②':'①');
+          b.onclick=function(ev){ if(ev&&ev.stopPropagation) ev.stopPropagation(); hotToggle(s,i); return false; };
+          hd.appendChild(b);
+        })(s);
+      }
+      if(S.bag[i]) d.appendChild(hd);
+      d.onclick=function(){ bagUse(i); };
+      g.appendChild(d);
+    })(i);
+  }
+  var de=document.getElementById('bagdesc');
+  if(de) de.textContent=bagDescAt(S.bagSel);
+  UI.bagDirty=false;
+  UI.renderHot();
+};
+UI.renderHot=function(){
+  var hot=document.getElementById('hot');
+  if(!hot) return;
+  var sig=S.hot.join(',');
+  if(hot._sig===sig) return;
+  hot._sig=sig;
+  hot.innerHTML='';
+  for(var i=0;i<2;i++){
+    (function(i){
+      var d=document.createElement('div');
+      d.className='hslot'+(S.hot[i]?' on':'');
+      d.innerHTML='<span class="k">'+(i+1)+'</span>'+(S.hot[i]?
+        ('<span class="ic" style="color:'+itemColor(S.hot[i])+'">'+itemGlyph(S.hot[i])+'</span>'+
+         '<span class="nm">'+ITEMS[S.hot[i]].n+'</span>'):'—');
+      d.onclick=function(){ useHot(i); };
+      hot.appendChild(d);
+    })(i);
+  }
+};
+UI.renderNote=function(){
+  var h='';
+  var ideas=ideasAvailable();
+  h+='<h2 style="font-size:15px;letter-spacing:3px;color:#9fe3c2;font-weight:400;margin-bottom:12px">目标</h2>';
+  h+='<div style="font-size:13px;opacity:.8;line-height:2;margin-bottom:22px">找到一条离开学校的路。在理智耗尽之前。</div>';
+  h+='<h2 style="font-size:15px;letter-spacing:3px;color:#9fe3c2;font-weight:400;margin-bottom:12px">想到的办法</h2>';
+  if(!ideas.length) h+='<div style="font-size:13px;opacity:.4">（一条都没有。得先走过那些地方。）</div>';
+  for(var i=0;i<ideas.length;i++) h+='<div style="font-size:13px;padding:6px 0;opacity:.85">· '+ideas[i].n+'</div>';
+  h+='<h2 style="font-size:15px;letter-spacing:3px;color:#9fe3c2;font-weight:400;margin:24px 0 12px">注意到的事</h2>';
+  var any=false;
+  for(var k in S.spots){ h+='<div style="font-size:13px;padding:4px 0;opacity:.7">· '+kLabel(k)+'</div>'; any=true; }
+  var CLUE_NOTE=[
+    ['roomkey','网络中心的门锁着 —— 钥匙应该在保安室。'],
+    ['stall','教学楼一楼厕所，第三个隔间：「11:45　放下一样东西　敲三下」。'],
+    ['trash','垃圾房的桶盖上写着：清运 17:30。'],
+    ['usb','门禁终端要插 U 盘。U 盘大概还在网络中心里。'],
+    ['comp','白名单里已经有我了。还差行政楼三楼那一步。'],
+    ['gatew','西小门的闸机只认白名单。'],
+    ['pendulum','物理实验室的单摆，能"预报"下一次。'],
+    ['bell','钟楼的钟是哑的。可它和十三下钟声有关系。']
+  ], ci;
+  for(ci=0;ci<CLUE_NOTE.length;ci++){
+    if(typeof hasClue==='function'&&hasClue(CLUE_NOTE[ci][0])){ h+='<div style="font-size:13px;padding:4px 0;opacity:.7">· '+CLUE_NOTE[ci][1]+'</div>'; any=true; }
+  }
+  if(!any) h+='<div style="font-size:13px;opacity:.4">（还没注意到什么。）</div>';
+  if(!hasItem('notebook')||!hasItem('pen')) h+='<div style="font-size:12px;opacity:.55;margin-top:20px">我：感觉头不舒服，很多东西都容易忘了。</div>';
+  document.getElementById('notein').innerHTML=h;
+};
+function kLabel(k){
+  for(var i=0;i<SPOTS.length;i++) if(SPOTS[i].id===k) return SPOTS[i].n;
+  var m={turn:'被拍肩膀',hand:'隔间的手',repeat:'作业交了吗',roster:'名单',comp:'机房',beast:'第三个隔间'};
+  return m[k]||k;
+}
+UI.renderThink=function(){
+  var ideas=ideasAvailable();
+  document.getElementById('thinkhint').textContent=ideas.length?
+    '按 H 静下来想。选一个，然后去做。':'（什么都想不出来。先走一走。）';
+  var el=document.getElementById('ideas');
+  el.innerHTML='';
+  for(var i=0;i<ideas.length;i++){
+    (function(it){
+      var d=document.createElement('div');
+      d.className='idea';
+      d.textContent=it.n;
+      d.onclick=function(){ chooseIdea(it.id); };
+      el.appendChild(d);
+    })(ideas[i]);
+  }
+};
+UI.renderMap=function(){
+  var el=document.getElementById('mapc');
+  var bw=BOUND.x1-BOUND.x0, bh=BOUND.y1-BOUND.y0;
+  var availW=Math.min(window.innerWidth*0.60,720);
+  var availH=window.innerHeight*0.76;
+  var sc=Math.min(availW/bw,availH/bh);
+  var cw=Math.round(bw*sc), ch=Math.round(bh*sc);
+  el.innerHTML='<canvas id="mapcv" width="'+cw+'" height="'+ch+'" style="display:block;margin:0 auto;border:1px solid rgba(130,180,155,.28);background:#0a1210"></canvas>';
+  var cv=document.getElementById('mapcv'); if(!cv) return;
+  var c=cv.getContext('2d'); if(!c) return;
+  function X(v){ return (v-BOUND.x0)*sc; }
+  function Y(v){ return (v-BOUND.y0)*sc; }
+  c.strokeStyle='rgba(120,180,150,.35)'; c.lineWidth=2;
+  c.strokeRect(X(BOUND.x0),Y(BOUND.y0),bw*sc,bh*sc);
+  c.fillStyle='rgba(150,160,150,.16)';
+  for(var ri=0;ri<ROADS.length;ri++){ var rd=ROADS[ri]; c.fillRect(X(rd[0]),Y(rd[1]),(rd[2]-rd[0])*sc,(rd[3]-rd[1])*sc); }
+  for(var i=0;i<OBJ.length;i++){
+    var o=OBJ[i];
+    c.fillStyle=o.k==='roof'?'#1c2a30':(o.k==='field'?'#16241b':(o.k==='court'?'#1a2427':(o.k==='garden'?'#17251e':'#182420')));
+    c.fillRect(X(o.x),Y(o.y),o.w*sc,o.h*sc);
+    c.strokeStyle='rgba(120,180,150,.30)'; c.lineWidth=1;
+    c.strokeRect(X(o.x),Y(o.y),o.w*sc,o.h*sc);
+    if(o.k==='roof'&&o.w*sc>34){
+      c.fillStyle='rgba(160,200,180,.55)'; c.font='10px monospace';
+      c.fillText(o.n,X(o.x)+3,Y(o.y)+12);
+    }
+  }
+  var gates=[['北门',GATE_N],['西小门',GATE_W],['南门',GATE_S]];
+  c.fillStyle='#c8a24a'; c.font='11px monospace';
+  for(i=0;i<gates.length;i++){
+    c.fillRect(X(gates[i][1].x)-2,Y(gates[i][1].y)-2,4,4);
+    c.fillText(gates[i][0],X(gates[i][1].x)-11,Y(gates[i][1].y)-6);
+  }
+  var px=X(S.x/SC), py=Y(S.y/SC);
+  c.fillStyle='#79c8a4';
+  c.beginPath(); c.arc(px,py,4.5,0,6.283); c.fill();
+  c.strokeStyle='rgba(121,200,164,.75)'; c.lineWidth=1.5;
+  c.beginPath(); c.moveTo(px,py);
+  c.lineTo(px+Math.cos(S.ang)*16,py+Math.sin(S.ang)*16); c.stroke();
+};
+UI.closePanelAll=function(){
+  ['bag','note','think','mapv','pause'].forEach(function(id){ UI.close(id); });
+};

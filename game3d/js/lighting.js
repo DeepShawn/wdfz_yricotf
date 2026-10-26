@@ -1,0 +1,199 @@
+/* 里世界 3D · 天光、雾、路灯 */
+'use strict';
+
+/* ---------- 天光：一条太阳曲线管所有东西 ----------
+   以前天空、环境光、雾各有各的时间表：天空 19:48 就黑透了，环境光要到 20:50 才暗，
+   雾却一直是近黑色 —— 白天远处的楼全成了黑剪影。现在全部从 sunAt() 取值，
+   日出 6:00，日落 18:36，前后各有一段霞光。 */
+var SUN_RISE=6.0, SUN_SET=18.6;
+function hourNow(){ return (((S.tsec%1440)+1440)%1440)/60; }
+function smooth01(a,b,x){ var t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); }
+function sunAt(h){
+  var span=SUN_SET-SUN_RISE;
+  var e=Math.sin(PI*(h-SUN_RISE)/span);            /* 太阳高度：白天 0..1，夜里为负 */
+  var day=smooth01(-0.10,0.32,e);                  /* 0 = 夜，1 = 白天 */
+  var gold=smooth01(-0.24,0.0,e)*(1-smooth01(0.06,0.42,e));   /* 地平线附近的霞光 */
+  var t=clamp((h-SUN_RISE)/span,0,1), az=PI*t;
+  return { e:e, day:day, gold:gold, night:1-day,
+    dir:[Math.cos(az), 0.10+Math.max(0,e)*1.2, 0.55*Math.sin(az)] };   /* 东升（+x）→ 南 → 西落 */
+}
+function skyBucket(){
+  var s=sunAt(hourNow());
+  if(s.day>0.7) return 'day';
+  if(s.day>0.08) return 'dusk';
+  return 'night';
+}
+var SKY_NIGHT=['#03060a','#070c11','#0c141a','#111b22'];
+var SKY_DAY  =['#3a6c9e','#5d8ebd','#92b4d1','#c4d5df'];
+var SKY_GOLD =['#262f48','#5d5168','#b8735a','#e09a6c'];
+function hex2rgb(h){
+  return [parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)];
+}
+var SKY_STORM=['#2a3036','#353d43','#444c52','#4e575d'];
+function skyRGB(hour){
+  var s=sunAt(hour), out=[], j, k, oc=(typeof GLR!=='undefined'&&GLR.overcast)||0;
+  for(j=0;j<4;j++){
+    var n=hex2rgb(SKY_NIGHT[j]), d=hex2rgb(SKY_DAY[j]), g=hex2rgb(SKY_GOLD[j]), st=hex2rgb(SKY_STORM[j]), c=[];
+    for(k=0;k<3;k++){
+      var v=n[k]+(d[k]-n[k])*s.day;
+      v=v+(g[k]-v)*s.gold*0.85;
+      v=v+(st[k]*(0.30+0.70*s.day)-v)*oc*0.9;          /* 下雨：压成铅灰 */
+      c.push(Math.round(v));
+    }
+    out.push(c);
+  }
+  return out;
+}
+function skyColorsAt(hour){
+  return skyRGB(hour).map(function(c){ return 'rgb('+c[0]+','+c[1]+','+c[2]+')'; });
+}
+function makeSky(arg){
+  try{
+    var cv=document.createElement('canvas');
+    cv.width=2; cv.height=256;
+    var c=cv.getContext('2d');
+    if(!c) return null;
+    var h=(typeof arg==='number')?arg:(arg==='night'?0:(arg==='dusk'?18.7:12));
+    var cols=skyColorsAt(h);
+    var gr=c.createLinearGradient(0,0,0,256);
+    gr.addColorStop(0.00,cols[0]);
+    gr.addColorStop(0.62,cols[1]);
+    gr.addColorStop(0.88,cols[2]);
+    gr.addColorStop(1.00,cols[3]);
+    c.fillStyle=gr; c.fillRect(0,0,2,256);
+    var t=new THREE.CanvasTexture(cv);
+    t.colorSpace=THREE.SRGBColorSpace;
+    return t;
+  }catch(e){ return null; }
+}
+function refreshSky(){
+  var q=Math.round(hourNow()*20)/20+Math.round((GLR.overcast||0)*10)*100;   /* 每 3 分钟一档；阴云另算 */
+  if(GLR.skyHour===q&&GLR.skyTex) return;
+  GLR.skyHour=q;
+  GLR.skyBucket=skyBucket();
+  if(GLR.skyTex&&GLR.skyTex.dispose) GLR.skyTex.dispose();
+  GLR.skyTex=makeSky(hourNow());
+  if(GLR.skyTex) GLR.scene.background=GLR.skyTex;
+}
+function dayLight(){ return sunAt(hourNow()).day; }
+var LCFG={
+  ptI:26, ptDist:14, ptDecay:2.0,
+  lampI:20, lampDist:15,
+  camI:1.6, camIk:1.4, camDist:12, camDecay:1.5
+};
+var MOON_DIR=[-0.42,0.80,0.43];
+var _lc1=null,_lc2=null;
+function mixRGB(a,b,t){ return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]; }
+function lightState(){
+  var sun=sunAt(hourNow());
+  var indoor=(S.mode==='in');
+  var roof=indoor&&S.room==='teach6';
+  if(roof) indoor=false;                     /* 天台上头顶就是天 */
+  var day=sun.day;
+  var wn=(typeof GLR!=='undefined'&&GLR.worldNorm)?GLR.worldNorm:0;
+  if(wn>0) day=day+(1-day)*0.6*wn;           /* "正常世界"那一段总是亮一点 */
+  var fnl=(S.fn&&S.fn.on&&S.fn.v<72)?1:0;
+  if(fnl) day=Math.max(day,0.85);
+  var st={ day:day, gold:sun.gold, sun:sun, indoor:indoor };
+  if(indoor){
+    var g=(S.room==='garage1');
+    st.amb = g?0.06:(0.15+0.22*day);
+    st.hemi= g?0.04:(0.08+0.17*day);
+    st.dir = g?0.03:(0.05+0.28*day);
+    st.ptK = g?1:(0.42+0.58*day);            /* 夜里的灯还亮着，只是暗、会闪 */
+  }else{
+    st.amb = 0.07+0.24*day;
+    st.hemi= 0.10+0.42*day;
+    st.dir = day>0.02 ? (0.16+0.86*day*(1-0.30*sun.gold)) : 0.15;
+    st.ptK = 1;
+  }
+  return st;
+}
+function updateLighting(){
+  var ocT=(typeof AN!=='undefined'&&AN.active&&(AN.id==='rain'||AN.id==='raindots'))?1:0;
+  GLR.overcast=(GLR.overcast||0)+(ocT-(GLR.overcast||0))*Math.min(1,(dtG||0.016)*0.6);
+  try{ refreshSky(); }catch(e){}
+  if(!GLR.amb) return;
+  var s=lightState(), i, sun=s.sun, oc=GLR.overcast;
+  GLR.amb.intensity=s.amb*(1-0.25*oc);
+  GLR.hemi.intensity=s.hemi*(1-0.30*oc);
+  GLR.moon.intensity=s.dir*(1-0.70*oc);
+  /* 颜色：白天偏暖白，霞光橙，夜里月光偏蓝 */
+  var sunCol=mixRGB([1.0,0.95,0.86],[1.0,0.62,0.38],sun.gold);
+  var dc=mixRGB([0.55,0.66,0.86],sunCol,smooth01(0.0,0.35,s.day));
+  GLR.moon.color.setRGB(dc[0],dc[1],dc[2]);
+  var hs=mixRGB([0.16,0.21,0.30],[0.77,0.85,0.93],s.day), hg=mixRGB([0.05,0.05,0.06],[0.43,0.40,0.32],s.day);
+  hs=mixRGB(hs,[0.86,0.62,0.50],sun.gold*0.5);
+  GLR.hemi.color.setRGB(hs[0],hs[1],hs[2]); GLR.hemi.groundColor.setRGB(hg[0],hg[1],hg[2]);
+  var ac=mixRGB([0.36,0.40,0.50],[0.50,0.49,0.47],s.day);
+  GLR.amb.color.setRGB(ac[0],ac[1],ac[2]);
+  if(s.day>0.02&&!s.indoor){
+    GLR.moon.position.set(sun.dir[0]*16, sun.dir[1]*16, sun.dir[2]*16);
+  }else{
+    GLR.moon.position.set(MOON_DIR[0]*16, MOON_DIR[1]*16, MOON_DIR[2]*16);
+  }
+  /* 雾：室外跟着地平线的天色走，白天薄、夜里厚；室内是屋里那种暗 */
+  var fog=GLR.scene.fog;
+  if(fog){
+    if(!s.indoor){
+      var hz=skyRGB(hourNow())[3];
+      var fk=0.86;
+      var fr=hz[0]/255*fk, fgc=hz[1]/255*fk, fb=hz[2]/255*fk;
+      var dens=0.030+(0.0068-0.030)*s.day;
+      if(AN&&AN.active&&AN.id==='rain'){ dens+=0.030; fr=fr*0.6+0.09; fgc=fgc*0.6+0.10; fb=fb*0.6+0.12; }
+      if(S.mode==='in') dens*=1.4;            /* 天台：雾近一点，楼底下看不清 */
+      fog.color.setRGB(fr,fgc,fb,THREE.SRGBColorSpace);
+      fog.density=dens;
+    }else{
+      fog.color.setHex(FOG_COL);
+      fog.density=(S.room==='garage1')?0.082:0.050;
+    }
+  }
+  var tt=GLR.time||0;
+  for(i=0;i<GLR.roomLights.length;i++){
+    var base=GLR.roomLightBase[i]*s.ptK;
+    var ph=i*2.7;
+    var flick=0.88+0.12*Math.sin(tt*7.3+ph)+0.04*Math.sin(tt*23.1+ph*1.7);
+    var blip=Math.sin(tt*0.9+ph*3.1);
+    if(blip>0.992) flick*=0.45;
+    if(s.day<0.3&&Math.sin(tt*0.37+ph*5.3)>0.985) flick*=0.15;   /* 夜里偶尔整盏暗下去一下 */
+    GLR.roomLights[i].intensity=base*Math.max(0.08,flick);
+  }
+  lampTick(s);
+  GLR.camLight.intensity=LCFG.camI+LCFG.camIk*s.day;
+}
+/* 路灯：灯头在夜里自发光；离镜头最近的几盏配一盏真点光（数量固定，避免切场景时重编着色器） */
+var OUT_LAMPS=[];
+function lampTick(s){
+  var night=s.indoor?0:1-s.day;
+  if(GLR.lampHeadMat){
+    var c0=[0.36,0.40,0.42], c1=[1.0,0.86,0.62];
+    var lc=mixRGB(c0,c1,smooth01(0.15,0.7,night));
+    GLR.lampHeadMat.color.setRGB(lc[0],lc[1],lc[2]);
+  }
+  if(GLR.winLitMat){
+    var wc=mixRGB([0.20,0.27,0.31],[0.95,0.78,0.48],smooth01(0.2,0.8,night));
+    GLR.winLitMat.color.setRGB(wc[0],wc[1],wc[2]);
+  }
+  if(!GLR.lampPool) return;
+  var i, L=GLR.lampPool;
+  if(S.mode!=='out'||night<0.05||!OUT_LAMPS.length){
+    for(i=0;i<L.length;i++) L[i].intensity=0;
+    return;
+  }
+  GLR.lampPick=(GLR.lampPick||0)-dtG;
+  if(GLR.lampPick<=0){
+    GLR.lampPick=0.35;
+    var cx=GLR.cam.position.x, cz=GLR.cam.position.z;
+    var best=OUT_LAMPS.slice().sort(function(a,b){
+      return ((a.x-cx)*(a.x-cx)+(a.z-cz)*(a.z-cz))-((b.x-cx)*(b.x-cx)+(b.z-cz)*(b.z-cz));
+    });
+    for(i=0;i<L.length;i++){ var b=best[i]; if(b) L[i].position.set(b.x,b.y-0.25,b.z); L[i].userData.on=!!b; }
+  }
+  var tt=GLR.time||0;
+  for(i=0;i<L.length;i++){
+    var fl=1;
+    if(i===1&&Math.sin(tt*1.7)>0.93) fl=0.25+0.5*Math.abs(Math.sin(tt*31));   /* 总有一盏接触不良 */
+    L[i].intensity=L[i].userData.on?LCFG.lampI*smooth01(0.15,0.7,night)*fl:0;
+  }
+}
