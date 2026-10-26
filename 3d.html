@@ -234,6 +234,7 @@ body.touch .bc{bottom:calc(178px + env(safe-area-inset-bottom,0px))}
 #tRun{right:calc(132px + env(safe-area-inset-right,0px));bottom:calc(44px + env(safe-area-inset-bottom,0px));width:70px;height:70px}
 #tAct{right:calc(26px + env(safe-area-inset-right,0px));bottom:calc(32px + env(safe-area-inset-bottom,0px));width:92px;height:92px;font-size:15px;
   background:rgba(20,48,38,.55);border-color:rgba(130,200,170,.5)}
+#tRun.held{background:rgba(120,200,170,.34);border-color:#79c8a4;color:#eafff5;box-shadow:0 0 14px rgba(120,220,180,.35)}
 #flash{position:fixed;inset:0;z-index:8;background:#000;pointer-events:none;opacity:0;transition:opacity .5s}
 #fade{position:fixed;inset:0;z-index:40;background:#05080a;pointer-events:none;opacity:0;transition:opacity .18s ease}
 @keyframes panelIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -345,11 +346,11 @@ body.pro #hud,body.pro #cross,body.pro #prompt{opacity:0 !important;transition:o
   <div class="srow"><span>音量</span><input type="range" id="sVol" min="0" max="100" value="70" oninput="Settings.vol(this.value)"><b id="sVolV">70</b></div>
   <div class="srow"><span>字幕停留</span><div class="seg" id="sSub">
     <button onclick="Settings.sub(0)">短</button><button onclick="Settings.sub(1)">标准</button><button onclick="Settings.sub(2)">长</button></div></div>
-  <div class="srow"><span>画面质量</span><div class="seg" id="sQ">
+  <div class="srow"><span>画质/细节</span><div class="seg" id="sQ">
     <button onclick="Settings.q(0)">低</button><button onclick="Settings.q(1)">中</button><button onclick="Settings.q(2)">高</button></div></div>
   <div class="srow"><span>镜头晃动</span><div class="seg" id="sShake">
     <button onclick="Settings.shake(0)">开</button><button onclick="Settings.shake(1)">关</button></div></div>
-  <div class="srow"><span>环境音</span><div class="seg" id="sAmb">
+  <div class="srow"><span>音乐/环境</span><div class="seg" id="sAmb">
     <button onclick="Settings.amb(1)">开</button><button onclick="Settings.amb(0)">关</button></div></div>
   <button onclick="Game.resume()" style="margin-top:6px">返回游戏</button>
 </div>
@@ -361,13 +362,13 @@ body.pro #hud,body.pro #cross,body.pro #prompt{opacity:0 !important;transition:o
     <div class="meyebrow">— THE OTHER SIDE</div>
     <div class="mtitle">里世界</div>
     <div class="mschool">武汉大学附属中学</div>
-    <div class="mhook">铃声响了。<br>可这一次，没有人离开。</div>
+    <div class="mhook">下课铃响了。<br>没有人站起来。<br>他们都在等你先走。</div>
     <div class="mcards">
       <button class="mcard" onclick="Game.start('easy')">
-        <em>01</em><span><b>预知梦</b><i>第一天的死亡会将你唤醒</i></span><u>→</u>
+        <em>01</em><span><b>预知梦</b><i>第一天死去，你会在座位上惊醒（三次）</i></span><u>→</u>
       </button>
       <button class="mcard" onclick="Game.start('hard')">
-        <em>02</em><span><b>梦魇</b><i>从第一天起，每个选择都有代价</i></span><u>→</u>
+        <em>02</em><span><b>梦魇</b><i>没有第二次。每个选择都有代价</i></span><u>→</u>
       </button>
       <button class="mcard" id="btncont" onclick="Game.continue_()" style="display:none">
         <em>03</em><span><b>继续上次</b><i>读取最近的存档</i></span><u>→</u>
@@ -381,7 +382,7 @@ body.pro #hud,body.pro #cross,body.pro #prompt{opacity:0 !important;transition:o
     </div>
   </div>
   <div class="mkeys">WASD 移动 · 鼠标环视 · Shift 奔跑 · E 交互<br>Tab 背包 · F 手电 · H 思索 · J 笔记 · M 地图 · Esc 暂停</div>
-  <div class="mfoot"><span>请记住你回去的路。</span><i>WUDFZ · FIELD RECORD 001</i></div>
+  <div class="mfoot"><span>请记住你回去的路。它会变。</span><i>WUDFZ · FIELD RECORD 001</i></div>
 </div>
 <div id="pcgame"><div class="pch">机房 · 贪吃蛇</div><canvas id="pccv" width="320" height="320"></canvas>
   <div class="pcf">WASD 转向 · Esc 退出 · 得分越高 SAN 越多</div></div>
@@ -500,7 +501,9 @@ function needWhere(t){
 function rateAt(t){ return periodAt(t)[4]; }
 function isNight(){ return S.tsec>=1290||S.tsec<440; }
 
-var DIFV={ easy:{iv:1.75,san:0.70}, hard:{iv:0.70,san:1.30} };
+/* 预知梦：中等（第一天死了能醒三次，异象 40–64 秒一次，提前一点告诉你下一个是什么）
+   梦魇：中上（不会醒，异象 24–40 秒一次，致死阈值更低，二选一的代价更重） */
+var DIFV={ easy:{iv:1.0,san:0.82}, hard:{iv:1.0,san:1.15} };
 function dif(){ return DIFV[S.diff]||DIFV.easy; }
 
 var ITEMS={
@@ -630,38 +633,29 @@ function genericFloor(W,H,nRoom,roomW,furn,opts){
     c0=x1+2;
     if(c0>=W-2) break;
   }
-  var cy=bot+Math.floor(corrH/2);
   g[H-2][3]='S'; g[H-2][4]='S';
-  if(opts.exit!==false) g[cy][Math.floor(W/2)]='O';
+  /* 出口开在外墙上（以前是走廊正中间一格看不见的"门"，楼上每层也都有） */
+  if(opts.exit){ g[H-1][Math.floor(W/2)]='O'; g[H-1][Math.floor(W/2)+1]='O'; }
   if(opts.podiumCh){ g[top][Math.floor(W/2)]=opts.podiumCh; }
   else if(opts.podium){ g[top][Math.floor(W/2)]='T'; }
   return g;
 }
 function computerFloor(){
+  /* 机房：西边是学生机房（普通电脑），东边隔出一间上锁的网络中心，
+     服务器、管理终端都在里面。以前白名单终端就摆在学生机中间，锁着的那间只有两格宽、塞满了机柜。 */
   var W=50,H=20,g=blank(W,H,'.'),x,y;
   border(g,W,H,'#');
   for(x=1;x<W-1;x++) g[15][x]='#';
-  g[15][25]='=';
-  for(x=5;x<=14;x++) g[1][x]='f';
-  for(x=32;x<=47;x++) g[3][x]='#';
-  g[3][39]='=';
-  g[1][32]='#'; g[2][32]='#';
-  for(x=34;x<=43;x++) g[1][x]='f';
-  g[1][36]='Q'; g[1][37]='Q';       /* 服务器终端 */
-  g[2][36]='f'; g[2][37]='f'; g[2][38]='f';
-  g[2][40]='f'; g[2][41]='f'; g[2][42]='f';
-  g[4][39]='.'; g[4][40]='.';
-  var px2=[12,24,36], pk, py2;
-  for(pk=0;pk<px2.length;pk++){
-    for(py2=4;py2<15;py2++) g[py2][px2[pk]]='#';
-    g[9][px2[pk]]='=';                 /* 门开在走廊那一侧 */
-  }
-  for(y=2;y<=12;y+=2){
-    for(x=3;x<=W-4;x+=4) g[y][x]='n';
-  }
-  g[14][22]='K'; g[14][28]='D';
+  g[15][16]='='; g[15][17]='=';                    /* 学生机房的门 */
+  for(y=1;y<15;y++) g[y][34]='#';                  /* 隔墙 */
+  g[15][41]='=';                                   /* 网络中心的门（上锁） */
+  g[1][17]='K';                                    /* 教师机 / 讲台 */
+  for(y=4;y<=12;y+=2) for(x=3;x<=31;x+=4) g[y][x]='n';
+  for(x=37;x<=46;x++){ if(x===41) continue; g[3][x]='f'; g[7][x]='f'; }   /* 两排机柜，中间留通道 */
+  g[11][37]='Q'; g[11][38]='Q';                    /* 服务器控制台 */
+  g[12][45]='D';                                   /* 门禁管理终端 */
+  g[13][47]='R';
   g[18][3]='S'; g[18][4]='S';
-  g[18][46]='O';
   return g;
 }
 function canteenFloor(){
@@ -671,7 +665,7 @@ function canteenFloor(){
   for(i=0;i<3;i++) g[20][10+i*12]='=';
   g[6][4]='k'; g[6][5]='k'; g[6][6]='k'; g[7][4]='k'; g[7][5]='k'; g[7][6]='k';
   for(y=2;y<=18;y+=3) for(x=2;x<=W-3;x+=4) g[y][x]='t';
-  g[24][30]='O'; g[26][3]='S'; g[26][4]='S';
+  g[27][30]='O'; g[27][31]='O'; g[26][3]='S'; g[26][4]='S';
   return g;
 }
 function dormFloor(f){
@@ -695,7 +689,7 @@ function dormFloor(f){
   }
   g[8][40]='S'; g[8][41]='S';
   g[8][42]='.';
-  g[8][43]='O';
+  if(f===1){ g[7][43]='O'; g[8][43]='O'; }
   return g;
 }
 function garageFloor(){
@@ -707,13 +701,13 @@ function garageFloor(){
   var cars=[[12,4],[12,9],[24,4],[24,9],[36,4],[36,9]];
   for(i=0;i<cars.length;i++){ g[cars[i][1]][cars[i][0]]='V'; }   /* V = 车；'c' 在教室代表椅子，不能复用 */
   g[13][55]='S'; g[13][56]='S';
-  g[13][57]='O';
+  g[12][59]='O'; g[13][59]='O';
   return g;
 }
 function trashFloor(){
   var W=7,H=5,g=blank(W,H,'.');
   border(g,W,H,'#');
-  g[2][3]='X'; g[3][5]='O';
+  g[2][3]='X'; g[3][6]='O';
   return g;
 }
 function linkFloor(){
@@ -726,9 +720,9 @@ function linkFloor(){
 function bellFloor(){
   var W=11,H=13,g=blank(W,H,'.');
   border(g,W,H,'#');
-  g[H-2][5]='O';                     /* 南门 */
-  g[2][5]='b';                       /* 钟 */
-  g[9][2]='K'; g[9][8]='K';          /* 两张供桌 */
+  g[H-1][5]='O';                     /* 南门 */
+  g[3][5]='U';                       /* 钟（以前用的是 'b'，画出来是一张宿舍床） */
+  g[9][2]='A'; g[9][8]='A';          /* 两张供桌 */
   g[4][2]='#'; g[4][8]='#';          /* 柱子 */
   g[6][2]='#'; g[6][8]='#';
   return g;
@@ -736,14 +730,14 @@ function bellFloor(){
 function guardFloor(){
   var W=6,H=8,g=blank(W,H,'.');
   border(g,W,H,'#');
-  g[1][4]='O'; g[2][4]='O'; g[6][1]='S'; g[4][3]='k';   /* 保安厅是值班柜台，不是讲台 */
+  g[3][5]='O'; g[4][5]='O'; g[3][2]='k'; g[4][2]='k';   /* 值班柜台；保安岗是平房，没有楼梯 */
   return g;
 }
 function gearFloor(){
   var W=8,H=6,g=blank(W,H,'.');
   border(g,W,H,'#');
   g[1][2]='R'; g[1][3]='R'; g[2][2]='R'; g[2][3]='R';
-  g[4][4]='O';
+  g[5][4]='O';
   return g;
 }
 
@@ -759,13 +753,13 @@ function buildInteriorData(){
   for(f=1;f<=5;f++) mkFloor('teach'+f,'教学楼 '+f+'F','teach',f,teachFloor(f));
   mkFloor('teach6','教学楼 天台','teach',6,rooftop());
   for(f=1;f<=5;f++) mkFloor('admin'+f,'行政楼 '+f+'F','admin',f,
-      genericFloor(2+6*7+5+4,22,6,7,'d',{corr:4,podiumCh:'K'}));
+      genericFloor(2+6*7+5+4,22,6,7,'d',{corr:4,podiumCh:'K',exit:f===1}));
   var LABKIND=['','物理实验室','化学实验室','机房','地理实验室','音乐教室'];
   var LABFURN=['','q','l','n','x','p'];
   for(f=1;f<=5;f++){
     if(f===3){ mkFloor('lab3','实验楼 3F · 机房','lab',3,computerFloor()); continue; }
     mkFloor('lab'+f,'实验楼 '+f+'F · '+LABKIND[f],'lab',f,
-      genericFloor(2+5*8+4+4,20,5,8,LABFURN[f]||'l',{corr:3,podiumCh:'K'}));
+      genericFloor(2+5*8+4+4,20,5,8,LABFURN[f]||'l',{corr:3,podiumCh:'K',exit:f===1}));
   }
   var kk2, kRow;
   for(kk2=1;kk2<=5;kk2++){
@@ -796,7 +790,11 @@ function buildInteriorData(){
   var a3r=Math.floor(ga3.length*0.5);
   ga3[a3r][Math.floor(ga3[0].length*0.5)]='D';
   mkFloor('canteen1','食堂 1F','canteen',1,canteenFloor());
-  for(f=1;f<=6;f++) mkFloor('dorm'+f,'宿舍 '+f+'F',f<=3?'dormN':'dormS',f,dormFloor(f));
+  /* 北宿舍 dorm1–3、南宿舍 dorm4–6，各自 1–3 层。以前南宿舍一楼的 floor 是 4，出口提示"窗子封死了"，出不去 */
+  for(f=1;f<=6;f++){
+    var df=((f-1)%3)+1;
+    mkFloor('dorm'+f,(f<=3?'北宿舍 ':'南宿舍 ')+df+'F',f<=3?'dormN':'dormS',df,dormFloor(df));
+  }
   mkFloor('garage1','地下车库','garw',-1,garageFloor());
   mkFloor('trash1','垃圾房','trash',-1,trashFloor());
   mkFloor('link1','连廊①','c1',2,linkFloor());
@@ -811,31 +809,32 @@ function buildInteriorData(){
 }
 
 var OBJ=[
-  {id:'garage', n:'地下车库出入口', x:315,y:142,w:150,h:42, k:'roof'},
+  {id:'garage', n:'地下车库出入口', x:315,y:142,w:150,h:42, k:'roof', door:'e'},
   {id:'guard',  n:'保安岗',         x:552,y:142,w:56, h:40, k:'roof'},
-  {id:'field',  n:'大操场',         x:293,y:213,w:102,h:282,k:'field'},
+  {id:'field',  n:'大操场',         x:293,y:213,w:102,h:209,k:'field'},   /* 南端让出体育器材室 */
   {id:'courtA', n:'篮球场',         x:306,y:262,w:76, h:46, k:'court'},
   {id:'courtB', n:'篮球场',         x:306,y:328,w:76, h:46, k:'court'},
   {id:'gear',   n:'体育器材室',     x:302,y:430,w:84, h:58, k:'roof'},
   {id:'court2', n:'篮球场',         x:435,y:220,w:130,h:160,k:'court'},
-  {id:'shed',   n:'电动车棚',       x:572,y:210,w:36, h:165,k:'roof'},
+  {id:'shed',   n:'电动车棚',       x:572,y:212,w:36, h:163,k:'roof'},
   {id:'bad3',   n:'三个羽毛球场',   x:425,y:405,w:183,h:95, k:'court'},
-  {id:'garw',   n:'地下车库人行口', x:285,y:510,w:62, h:58, k:'roof'},
+  {id:'garw',   n:'地下车库人行口', x:300,y:527,w:32, h:24, k:'roof'},
   {id:'admin',  n:'行政楼',         x:400,y:515,w:270,h:90, k:'roof', open1f:1},
-  {id:'c1',     n:'连廊①',         x:602,y:605,w:60, h:65, k:'link'},
-  {id:'bad2',   n:'两个羽毛球场',   x:410,y:612,w:170,h:54, k:'court'},
+  {id:'c1',     n:'连廊①',         x:602,y:618,w:60, h:52, k:'link'},    /* 让开行政楼的柱廊 */
+  {id:'bad2',   n:'两个羽毛球场',   x:410,y:622,w:170,h:46, k:'court'},
   {id:'lab',    n:'实验楼',         x:400,y:670,w:270,h:100,k:'roof', open1f:1},
-  {id:'c2',     n:'连廊②',         x:602,y:770,w:60, h:90, k:'link'},
-  {id:'track',  n:'小跑道',         x:400,y:780,w:200,h:80, k:'track'},
+  {id:'c2',     n:'连廊②',         x:602,y:783,w:60, h:82, k:'link'},
+  {id:'track',  n:'小跑道',         x:400,y:792,w:196,h:66, k:'track'},
   {id:'bell',   n:'钟楼',           x:400,y:878,w:52, h:94, k:'roof'},
   {id:'teach',  n:'教学楼',         x:452,y:865,w:218,h:120,k:'roof', open1f:1},
   {id:'garden', n:'花园',           x:400,y:1000,w:270,h:78,k:'garden'},
-  {id:'dormN',  n:'学生宿舍',       x:452,y:1090,w:200,h:50,k:'roof'},
+  {id:'dormN',  n:'北宿舍',         x:452,y:1090,w:200,h:50,k:'roof', door:'n'},   /* 南面贴着食堂，门只能朝北 */
   {id:'canteen',n:'食堂',           x:548,y:1140,w:104,h:40,k:'roof', door:'w'},
-  {id:'dormS',  n:'学生宿舍',       x:452,y:1180,w:200,h:50,k:'roof'},
+  {id:'dormS',  n:'南宿舍',         x:452,y:1180,w:200,h:50,k:'roof', door:'s'},
   {id:'trash',  n:'垃圾房',         x:740,y:1060,w:56, h:62, k:'roof'}
 ];
-var GATE_N={x:514,y:118}, GATE_W={x:244,y:626}, GATE_S={x:394,y:1018};
+/* 三个校门都落在围墙线上（以前离墙 5–10 米，门是"浮"在校园里的，墙上也没有口子） */
+var GATE_N={x:514,y:95}, GATE_W={x:200,y:624}, GATE_S={x:386,y:1290};
 var BOUND={x0:200,y0:95,x1:830,y1:1290};
 var ELEV_Y=990;
 
@@ -924,6 +923,13 @@ function initGL(){
 
   var camLight=new THREE.PointLight(0xbfd0d8,LCFG.camI,LCFG.camDist,LCFG.camDecay);
   cam.add(camLight);
+  var lampPool=[], lp;
+  for(lp=0;lp<3;lp++){                       /* 数量固定：室内也留着（强度 0），免得切场景重编着色器 */
+    var pl0=new THREE.PointLight(0xffd9a0,0,LCFG.lampDist,1.6);
+    pl0.userData={on:false};
+    pl0.position.set(0,-50,0);
+    scene.add(pl0); lampPool.push(pl0);
+  }
 
   var rt=new THREE.WebGLRenderTarget(2,2,{
     minFilter:THREE.LinearFilter,magFilter:THREE.LinearFilter,
@@ -970,7 +976,8 @@ function initGL(){
 '  col+=(n-0.5)*0.010*(1.0-uFx);',
 '  float vg=distance(uv,vec2(0.5,0.5));',
 '  col*=1.0-0.55*smoothstep(0.34,1.04,vg*1.24)*(1.0-uFx);',
-'  col=mix(col,vec3(0.55,0.05,0.04),uHurt*0.45);',
+'  col*=mix(vec3(1.0),vec3(1.0,0.32,0.27),uHurt*0.85);',
+'  col=mix(col,vec3(0.16,0.0,0.0),uHurt*0.55*smoothstep(0.28,0.95,vg*1.3));',
 '  col+=vec3(0.90,0.95,1.0)*uFlash*0.8;',
       '  if(uDm>0.5&&uDm<1.5){',
       '    col*=1.0-uDt*0.72;',
@@ -1010,7 +1017,7 @@ function initGL(){
   });
   postScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),postMat));
 
-  GLR={renderer:renderer,scene:scene,cam:cam,torch:torch,camLight:camLight,
+  GLR={renderer:renderer,scene:scene,cam:cam,torch:torch,camLight:camLight,lampPool:lampPool,
        amb:amb,hemi:hemi,moon:moon,
        rt:rt,postScene:postScene,postCam:postCam,postMat:postMat,
        roomLights:[],roomLightBase:[],roomMesh:null,outMesh:null,time:0,hurt:0,flash:0};
@@ -1063,6 +1070,9 @@ BoxBuilder.prototype.box=function(x,y,z,sx,sy,sz,col,shade){
   this.v=v;
 };
 BoxBuilder.prototype.quad=function(ax,az,bx,bz,cx,cz,dx,dz,y,col){
+  /* 地面四边形必须朝上：顶点顺序反了就会被背面剔除。
+     以前操场、球场、花园的四边形全是反的 —— 从上面看根本不存在，只剩几根白线。 */
+  if((bz-az)*(cx-ax)-(bx-ax)*(cz-az)<0){ var tx=bx,tz=bz; bx=dx; bz=dz; dx=tx; dz=tz; }
   var r=((col>>16)&255)/255,g=((col>>8)&255)/255,b=(col&255)/255;
   this.p.push(ax,y,az, bx,y,bz, cx,y,cz, dx,y,dz);
   var xs=[ax,bx,cx,dx], zs=[az,bz,cz,dz];
@@ -1267,6 +1277,9 @@ function stairInfo(R,x,y){
 function buildRoomGeometry(R){
   S.__pianoPlaced=0;
   R.stats={desk:0, cubicle:0, chair:0, seat:0};
+  R.stairExtra=[];                 /* 以前每进一次房间都往里追加一遍，越积越多 */
+  R.propExtra=[];                  /* 大件家具的真实占地（米，房间中心为原点） */
+  function solidM(cx,cz,sx,sz){ R.propExtra.push({x0:cx-sx/2,x1:cx+sx/2,z0:cz-sz/2,z1:cz+sz/2}); }
   var STAIR_CUT={};
   (function(){
     var cx2,cy2;
@@ -1311,7 +1324,59 @@ function buildRoomGeometry(R){
       ch=R.grid[y][x]; if(ch===undefined) continue;
       var cx=CX(x), cz=CZ(y);
       if(ch==='.') continue;
-      if(ch==='O') continue;
+      if(ch==='O'){
+        /* 外墙上的出口：门框 + 两扇玻璃门 + 门上的安全出口灯（以前这一格什么都不画，墙上就是个洞） */
+        var onB=(y===0||y===H-1||x===0||x===W-1);
+        if(!onB) continue;
+        var vert=(x===0||x===W-1), sgn=(x===0||y===0)?-1:1;
+        var ox=vert?cx+sgn*tw*0.30:cx, oz=vert?cz:cz+sgn*th*0.30;
+        function DP(u,yy,v,su,sy,sv,col,sh){ if(vert) B.box(ox+v,yy,oz+u,sv,sy,su,col,sh); else B.box(ox+u,yy,oz+v,su,sy,sv,col,sh); }
+        B.box(cx,(2.30+WALLH)/2,cz,tw,WALLH-2.30,th,PALETTE.wall,0.94);       /* 门头 */
+        DP(-tw/2+0.04,1.15,0,0.08,2.30,0.16,0x39424a,1.05);
+        DP( tw/2-0.04,1.15,0,0.08,2.30,0.16,0x39424a,1.05);
+        DP(0,2.26,0,tw,0.08,0.16,0x39424a,1.05);
+        DP(-tw*0.24,1.12,0,tw*0.44,2.18,0.04,0x2a3a44,1.0);                  /* 玻璃（暗） */
+        DP( tw*0.24,1.12,0,tw*0.44,2.18,0.04,0x2a3a44,1.0);
+        DP(0,1.12,0,0.05,2.18,0.06,0x39424a,1.0);
+        DP(-0.07,1.05,-sgn*0.05,0.03,0.40,0.03,0xb8c0c2,1.2);               /* 推杆 */
+        DP( 0.07,1.05,-sgn*0.05,0.03,0.40,0.03,0xb8c0c2,1.2);
+        G.box(vert?cx-sgn*0.12:cx, 2.48, vert?cz:cz-sgn*0.12, vert?0.04:0.42, 0.16, vert?0.42:0.04, 0x37c47a, 1.0);   /* 安全出口 */
+        continue;
+      }
+      if(ch==='U'){                     /* 钟楼的铜钟：吊在横梁上 */
+        B.box(cx,2.82,cz,tw*2.6,0.18,0.22,0x3a2a1c,1.0);
+        B.box(cx,2.60,cz,0.10,0.30,0.10,0x2a2018,1.0);
+        var bl0;
+        for(bl0=0;bl0<6;bl0++){
+          var bw0=0.62+bl0*0.13, by0=2.36-bl0*0.17;
+          B.box(cx,by0,cz,bw0,0.18,bw0,bl0%2?0x6e5228:0x7c5c2c,1.0+bl0*0.03);
+        }
+        B.box(cx,1.38,cz,1.40,0.08,1.40,0x5a4220,0.95);                    /* 钟口 */
+        B.box(cx,1.32,cz,0.16,0.20,0.16,0x2a2018,1.0);                     /* 钟舌 */
+        B.box(cx+0.9,1.9,cz,1.1,0.12,0.12,0x5a4632,1.0);                    /* 撞木 */
+        BF.aoPatch(cx,cz,1.5,1.5,0.8);
+        solidM(cx,cz,1.3,1.3);
+        continue;
+      }
+      if(ch==='A'){                     /* 供桌：香炉、白蜡烛、一碗插着筷子的饭 */
+        BF.aoPatch(cx,cz,1.3,0.8,0.9);
+        B.box(cx,0.80,cz,1.30,0.06,0.70,0x5a2a20,1.05);
+        B.box(cx,0.40,cz,1.20,0.78,0.60,0x4a2018,0.95);
+        B.box(cx,0.40,cz+0.31,1.10,0.70,0.02,0x8a2a22,1.0);
+        B.box(cx,0.90,cz-0.10,0.24,0.14,0.24,0x6a5a3a,1.1);                 /* 香炉 */
+        B.box(cx-0.03,1.05,cz-0.10,0.01,0.22,0.01,0x9a7a4a,1.0);
+        B.box(cx+0.03,1.04,cz-0.10,0.01,0.20,0.01,0x9a7a4a,1.0);
+        B.box(cx-0.45,0.98,cz,0.05,0.30,0.05,0xf0e8d8,1.1);                 /* 蜡烛 */
+        B.box(cx+0.45,0.98,cz,0.05,0.30,0.05,0xf0e8d8,1.1);
+        G.box(cx-0.45,1.16,cz,0.03,0.05,0.03,0xffc860,1.0);
+        G.box(cx+0.45,1.16,cz,0.03,0.05,0.03,0xffc860,1.0);
+        B.box(cx+0.2,0.88,cz+0.12,0.16,0.08,0.16,0xe8e2d4,1.1);             /* 饭碗 */
+        B.box(cx+0.2,0.98,cz+0.12,0.012,0.18,0.012,0x3a2a1a,1.0);           /* 筷子竖着 */
+        B.box(cx+0.22,0.98,cz+0.12,0.012,0.18,0.012,0x3a2a1a,1.0);
+        B.box(cx-0.18,0.85,cz+0.15,0.14,0.02,0.20,0xd8d4c6,1.0);            /* 一张照片 */
+        solidM(cx,cz,1.3,0.7);
+        continue;
+      }
       if(ch==='#'){
         if(STAIR_CUT[x+','+y]) continue;          /* 这一格让给楼梯井 */
         B.box(cx,WALLH/2,cz,tw,WALLH,th,PALETTE.wall,0.94);
@@ -1467,6 +1532,7 @@ function buildRoomGeometry(R){
       }
       if(ch==='V'){                     /* 车位上的车（尺寸按真实车长放大约 2.6 倍） */
         BF.aoPatch(cx,cz,tw*3.9,th*2.4,1.0);
+        solidM(cx,cz,tw*3.70,th*1.85);   /* 以前碰撞只有一格的 0.82，人能直接走进车身里 */
         B.box(cx,0.80,cz,tw*3.70,1.35,th*1.85,0x39424a,1.02);
         B.box(cx,1.55,cz-th*0.08,tw*2.10,1.00,th*1.50,0x424c55,1.05);
         B.box(cx,1.58,cz+th*0.52,tw*1.95,0.72,0.12,0x18222c,1.20);
@@ -1485,6 +1551,7 @@ function buildRoomGeometry(R){
         else bdir=(cz<0)?1:-1;
         var bw = tw*0.92, bl = th*1.62, bcz = cz + bdir*(bl-th)*0.5;
         BF.aoPatch(cx,bcz,bw*0.98,bl*0.98,0.9);
+        solidM(cx,bcz,bw*0.94,bl);
         B.box(cx,0.18,bcz,bw*0.94,0.36,bl,0x5a4632,1.0);          /* 床架 */
         B.box(cx,0.42,bcz,bw*0.90,0.14,bl*0.96,0xd8d4c8,1.05);    /* 床垫 */
         B.box(cx,0.53,bcz-bdir*bl*0.34,bw*0.66,0.12,bl*0.20,0xe8e4d8,1.1); /* 枕头 */
@@ -1505,6 +1572,10 @@ function buildRoomGeometry(R){
         B.box(cx,1.08,cz-0.12,tw*0.46,0.34,0.05,0x1d262b,1.0);
         B.box(cx,1.08,cz-0.09,tw*0.42,0.28,0.02,0x7fb0c8,1.25);
         B.box(cx,0.82,cz-0.12,tw*0.10,0.14,0.10,0x39434a,1.0);
+        B.box(cx+0.18,0.76,cz+0.06,0.16,0.02,0.10,0x2a3036,1.0);           /* 键盘旁的鼠标 */
+        B.box(cx,0.45,cz+0.42,0.40,0.05,0.38,0x2e3438,1.0);                 /* 椅子 */
+        B.box(cx,0.72,cz+0.60,0.40,0.46,0.05,0x2e3438,1.0);
+        B.box(cx,0.22,cz+0.42,0.05,0.44,0.05,0x1d2226,1.0);
         continue;
       }
       if(ch==='x'){                     /* 地图/挂图架 */
@@ -1531,6 +1602,7 @@ function buildRoomGeometry(R){
         }
         var pD=0.62;                           /* 琴体进深 */
         BF.aoPatch(cx,cz,1.5,1.0,0.85);
+        if(pAx==='z') solidM(cx,cz+pn*(0.5-pD*0.5),1.48,pD+0.04); else solidM(cx+pn*(0.5-pD*0.5),cz,pD+0.04,1.48);
         var bBack=0.5-pD*0.5;                  /* 琴体中心（贴墙） */
         var bFront=-0.12;                      /* 琴体前沿 */
         PB(0, bBack, 0.60, 1.44, 1.20, pD, 0x23282b, 1.0);             /* 琴体 */
@@ -1553,6 +1625,7 @@ function buildRoomGeometry(R){
         if(R.host==='admin'){
           var adw=tw*1.15, add=th*0.86;
           BF.aoPatch(cx,cz,adw*1.02,add*1.02,0.9);
+          solidM(cx,cz,adw,add);
           B.box(cx,0.72,cz,adw,0.06,add,0x7a5a38,1.08);                /* 桌面 */
           B.box(cx,0.375,cz,adw*0.96,0.69,add*0.92,0x6a4c30,0.93);     /* 桌身 */
           B.box(cx,0.40,cz-add*0.30,adw*0.92,0.55,0.03,0x53401f,0.86); /* 挡板 */
@@ -1571,6 +1644,7 @@ function buildRoomGeometry(R){
         }else{
           var lw=tw*1.30, ld=th*0.82;
           BF.aoPatch(cx,cz,lw*1.02,ld*1.02,0.9);
+          solidM(cx,cz,lw,ld);
           B.box(cx,0.90,cz,lw,0.07,ld,0x333d3b,1.16);                  /* 台面 */
           B.box(cx,0.44,cz,lw*0.94,0.87,ld*0.90,0x7d878c,1.0);         /* 柜体 */
           B.box(cx,0.44,cz+ld*0.46,lw*0.90,0.80,0.03,0x6b757a,1.0);    /* 柜门朝走廊，不是朝墙 */
@@ -1684,15 +1758,22 @@ function buildRoomGeometry(R){
       if(ch==='c'){
         BF.aoPatch(cx,cz,tw*0.5,th*0.5,0.7); B.box(cx,0.66,cz,tw*0.92,1.32,th*0.86,PALETTE.car,1.0); continue; }
       if(ch==='D'){ B.box(cx,0.78,cz,tw*0.7,1.1,th*0.6,PALETTE.data,1.05); continue; }
-      if(ch==='X'){ B.box(cx,0.58,cz,tw*0.85,1.15,th*0.85,PALETTE.trash,1.0); continue; }
-      if(ch==='B'||ch==='G'){ B.box(cx,0.88,cz,tw*0.9,1.75,th*0.85,PALETTE.wall2,1.0); continue; }
-      if(ch==='b'){
-        B.box(cx,2.72,cz,tw*1.5,0.14,th*0.5,0x4a3a2a,1.0);
-        B.box(cx,2.52,cz,tw*0.30,0.26,th*0.30,0x8a6a3a,1.05);
-        B.box(cx,2.10,cz,tw*0.52,0.62,th*0.52,0x8f6d3c,1.05);
-        B.box(cx,1.66,cz,tw*0.72,0.30,th*0.72,0x9a7642,1.05);
-        B.box(cx,1.40,cz,tw*0.16,0.34,th*0.16,0x3a2f22,1.0);
-        B.aoPatch(cx,cz,tw*0.7,th*0.7,0.7);
+      if(ch==='X'){                     /* 带轮子的大垃圾桶（以前是一块灰方砖） */
+        BF.aoPatch(cx,cz,tw*0.9,th*0.9,0.9);
+        B.box(cx,0.62,cz,tw*0.80,1.06,th*0.78,0x2f5a3a,1.0);
+        B.box(cx,1.18,cz-0.02,tw*0.86,0.07,th*0.84,0x24482e,1.05);           /* 盖子，没盖严 */
+        B.box(cx,1.24,cz-th*0.40,tw*0.70,0.05,0.05,0x1a2a1e,1.0);
+        B.box(cx-0.30,0.07,cz+0.30,0.12,0.14,0.06,0x111418,1.0);
+        B.box(cx+0.30,0.07,cz+0.30,0.12,0.14,0.06,0x111418,1.0);
+        B.box(cx,0.85,cz+th*0.40,0.30,0.30,0.01,0xd8d4c6,1.0);              /* 白色编号：3 */
+        continue;
+      }
+      if(ch==='B'||ch==='G'){           /* 厕所隔间：两侧隔板 + 一扇关着的门，上下都留空 */
+        B.box(cx-tw*0.47,1.05,cz,0.04,1.80,th*0.92,PALETTE.wall2,1.0);
+        B.box(cx+tw*0.47,1.05,cz,0.04,1.80,th*0.92,PALETTE.wall2,1.0);
+        B.box(cx,1.05,cz+th*0.44,tw*0.86,1.70,0.04,0x8a948e,1.0);
+        B.box(cx+tw*0.30,1.05,cz+th*0.47,0.05,0.10,0.03,0xb8c0c2,1.2);
+        B.box(cx+tw*0.36,1.05,cz+th*0.47,0.07,0.05,0.02,0xc04a3a,1.3);     /* 红色"有人" */
         continue;
       }
       var colName=PALETTE_NAME[ch];
@@ -1705,14 +1786,16 @@ function buildRoomGeometry(R){
     B.box(0,2.86,lz2+0.55,W*0.96,0.10,0.10,0x8a9298,1.05);
     B.box(0,2.74,lz2+1.15,W*0.96,0.07,0.07,0xb46a3a,1.05);
     if(R.floor===2){
-      var fh;
+      /* 通风橱：靠在第一间、最后一间的南墙上（以前摆在隔墙正中，一半插在墙里） */
+      var fh, hoodC=[3.5,43.5];
       for(fh=0;fh<2;fh++){
-        var fx=(-0.28+fh*0.56)*W*tw;
-        B.box(fx,1.10,-halfH+13.6*th,tw*1.9,2.20,th*0.86,0x6f7a80,1.05);   /* 柜体 */
-        B.box(fx,1.35,-halfH+13.6*th+0.05,tw*1.5,0.90,0.06,0x25303a,1.0);  /* 玻璃门 */
-        B.box(fx,1.35,-halfH+13.6*th+0.10,tw*1.4,0.80,0.02,0x9fc4d8,1.25); /* 里面那层反光 */
-        B.box(fx,2.24,-halfH+13.6*th,tw*1.94,0.12,th*0.90,0x4a545a,1.0);   /* 顶罩 */
-        B.box(fx,0.62,-halfH+13.6*th,tw*1.7,0.10,th*0.7,0x39434a,1.0);     /* 操作台 */
+        var fx=-halfW+hoodC[fh]*tw, fz=-halfH+15*th-0.46;
+        B.box(fx,1.10,fz,tw*1.9,2.20,0.86,0x6f7a80,1.05);              /* 柜体 */
+        B.box(fx,1.35,fz-0.44,tw*1.5,0.90,0.04,0x25303a,1.0);          /* 玻璃门 */
+        B.box(fx,1.35,fz-0.47,tw*1.4,0.80,0.02,0x9fc4d8,1.25);
+        B.box(fx,2.26,fz,tw*1.94,0.12,0.90,0x4a545a,1.0);              /* 顶罩 */
+        B.box(fx,0.90,fz-0.30,tw*1.7,0.06,0.30,0x39434a,1.0);          /* 操作台 */
+        solidM(fx,fz,tw*1.9,0.9);
       }
     }
     B.box(-halfW+1.0,0.55,-halfH+1.2,0.10,1.10,0.10,0x5aa07a,1.1);
@@ -1742,7 +1825,8 @@ function buildRoomGeometry(R){
       if(lx>=56&&lx<=61) continue;
       var lz=zWallS+th+0.24;
       B.box(-halfW+(lx+0.5)*tw, 0.86, lz, tw*0.86, 1.72, 0.42, 0x39424a, 0.98);
-      B.box(-halfW+(lx+0.5)*tw, 1.28, lz-0.22, tw*0.80, 0.03, 0.02, 0x59636b, 1.0);
+      B.box(-halfW+(lx+0.5)*tw, 1.28, lz+0.22, tw*0.80, 0.03, 0.02, 0x59636b, 1.0);   /* 柜门缝朝走廊 */
+      solidM(-halfW+(lx+0.5)*tw, lz, tw*0.86, 0.42);
     }
     for(var bx2=6;bx2<W-6;bx2+=13){
       var bb0=Math.floor(bx2+1.3), bbOK=true;
@@ -1764,13 +1848,19 @@ function buildRoomGeometry(R){
         B.box(CX(gx2),WALLH/2,CZ(gz2),tw*1.02,WALLH,th*1.02,0x27502f,0.95);
       }
     }
-    for(var tb=0;tb<2;tb++){
-      var tz2=1.9+tb*2.2;
-      B.box(0.9+tb*1.6,0.76,tz2,2.74,0.05,1.52,0x1f3f6e,1.15);   /* 蓝色台面 */
-      B.box(0.9+tb*1.6,0.74,tz2,2.74,0.03,1.52,0xe8e8e8,0.95);
-      B.box(0.9+tb*1.6,0.38,tz2,0.08,0.76,0.08,0x3a3f42,1.0);
-      B.box(0.9+tb*1.6,0.94,tz2,2.80,0.10,0.02,0xd8d8d2,1.0);     /* 球网 */
-    }
+    /* 一张乒乓球台，竖着放在货架对面（以前两张，第二张有一半在墙外） */
+    var ttx=1.9, ttz=0.1;
+    B.box(ttx,0.76,ttz,1.52,0.05,2.74,0x1f3f6e,1.15);
+    B.box(ttx,0.785,ttz,0.02,0.005,2.70,0xe8e8e8,1.0);
+    B.box(ttx-0.6,0.38,ttz-1.1,0.06,0.76,0.06,0x3a3f42,1.0); B.box(ttx+0.6,0.38,ttz-1.1,0.06,0.76,0.06,0x3a3f42,1.0);
+    B.box(ttx-0.6,0.38,ttz+1.1,0.06,0.76,0.06,0x3a3f42,1.0); B.box(ttx+0.6,0.38,ttz+1.1,0.06,0.76,0.06,0x3a3f42,1.0);
+    B.box(ttx,0.86,ttz,1.60,0.15,0.02,0xd8d8d2,0.95);                  /* 球网 */
+    solidM(ttx,ttz,1.52,2.74);
+    /* 角落里一筐篮球、一卷跳绳 */
+    B.box(-2.4,0.30,1.4,0.8,0.6,0.6,0x5a5f62,1.0);
+    var bb3;
+    for(bb3=0;bb3<4;bb3++) B.box(-2.6+(bb3%2)*0.4,0.66,1.25+((bb3>>1)*0.3),0.24,0.24,0.24,0xc0602a,1.0);
+    solidM(-2.4,1.4,0.8,0.6);
   }
   if(R.host==='teach'&&R.floor>=1&&R.floor<=5){
     var spans=[[5,11],[13,19],[21,27],[29,35],[37,43],[45,51]];
@@ -1806,7 +1896,7 @@ function buildRoomGeometry(R){
     }
   }
 
-  if(!isRoof){
+  if(!isRoof&&R.host!=='bell'){     /* 钟楼里只有蜡烛，不挂日光灯管 */
     var rows=[];
     if(R.host==='teach'&&R.floor>=1&&R.floor<=5){ rows.push(18); }
     else { rows.push(Math.floor(H*0.5)); }
@@ -1839,11 +1929,11 @@ function buildRoomGeometry(R){
 }
 var OBLD_H={ guard:3.6, shed:3.4, gear:4.4, trash:3.8, canteen:8.6,
   dormN:18.0, dormS:18.0, bell:19.0, garage:0, garw:0 };
-function addEntrance(B, px, pz, sw, sd, face){
+function addEntrance(B, px, pz, sw, sd, face, colonnade){
   face=face||'s';
   var horz=(face==='e'||face==='w');
   var along=horz?sd:sw;                       /* 门洞所在立面的宽度 */
-  var dw=Math.min(4.2, along*0.26), dh=2.6, dep=1.1;
+  var dw=Math.min(4.2, along*0.26), dh=colonnade?2.40:2.6, dep=1.1;
   var nx=0,nz=0,bx=px,bz=pz;
   if(face==='s'){ nz=1;  bz=pz+sd/2; }
   else if(face==='n'){ nz=-1; bz=pz-sd/2; }
@@ -1860,10 +1950,18 @@ function addEntrance(B, px, pz, sw, sd, face){
   put(-dw*0.56,dh/2,dep*0.95,dw*0.12,dh+0.2,0.22,0xd8d4cc,1.05);  /* 门框 */
   put( dw*0.56,dh/2,dep*0.95,dw*0.12,dh+0.2,0.22,0xd8d4cc,1.05);
   put(0,dh+0.10,dep*0.95,dw+0.5,0.18,0.22,0xd8d4cc,1.05);
-  put(0,dh+0.55,dep*0.75,dw+1.9,0.22,dep*1.7,0xc9c4bb,1.05);       /* 雨棚 */
-  put(0,dh+0.36,dep*0.75,dw+1.7,0.14,dep*1.6,0x8a5a52,1.0);
-  put(0,dh+1.35,dep*0.20,dw+1.2,0.62,0.14,0xe8e4de,1.10);          /* 门楣牌 */
-  put(0,dh+1.35,dep*0.29,dw+0.9,0.44,0.03,0x8b3a2e,1.0);
+  if(!colonnade){                                                   /* 有柱廊的楼，柱廊就是雨棚 */
+    put(0,dh+0.55,dep*0.75,dw+1.9,0.22,dep*1.7,0xc9c4bb,1.05);     /* 雨棚 */
+    put(0,dh+0.36,dep*0.75,dw+1.7,0.14,dep*1.6,0x8a5a52,1.0);
+  }
+  if(colonnade){                                                   /* 门牌挂在柱廊檐口上 */
+    put(0,3.34,2.92,dw+1.2,0.46,0.06,0xe8e4de,1.10);
+    put(0,3.34,2.96,dw+0.9,0.32,0.03,0x8b3a2e,1.0);
+  }else{
+    put(0,dh+1.35,dep*0.20,dw+1.2,0.62,0.14,0xe8e4de,1.10);        /* 门楣牌 */
+    put(0,dh+1.35,dep*0.29,dw+0.9,0.44,0.03,0x8b3a2e,1.0);
+  }
+  put(dw*0.30,dh-0.20,dep*1.02,0.30,0.14,0.04,0x2fae6a,1.8);       /* 安全出口灯 */
   put(0,0.09,dep*1.5,dw+2.6,0.18,1.0,0xb8b2a8,1.0);                /* 台阶 */
   put(0,0.24,dep*1.1,dw+2.2,0.16,0.7,0xb8b2a8,1.0);
 }
@@ -1934,6 +2032,8 @@ function buildOutdoorGeometry(){
   var x0=BOUND.x0*SC*U2M, y0=BOUND.y0*SC*U2M;
   var x1=BOUND.x1*SC*U2M, y1=BOUND.y1*SC*U2M;
   var cx=(x0+x1)/2, cz=(y0+y1)/2, w=x1-x0, d=y1-y0;
+  OUTX={L:new BoxBuilder(), W:new BoxBuilder(), G:new BoxBuilder(), J:new BoxBuilder()};
+  OUT_SOLID=[]; OUT_LAMPS=[];
   addOutdoorProps(B, BF, x0, y0, x1, y1);
 
   for(i=0;i<OBJ.length;i++){
@@ -1965,16 +2065,28 @@ function buildOutdoorGeometry(){
       B.box(px-sw/2+trackW,0.055,pz,0.16,0.03,sd-trackW*2,0xe4e2dc,1.0);
       B.box(px+sw/2-trackW,0.055,pz,0.16,0.03,sd-trackW*2,0xe4e2dc,1.0);
       BF.quad(ix1-6,iz0+4, ix1-2,iz0+4, ix1-2,iz0+8, ix1-6,iz0+8, 0.070, 0xc8b98a);
+      /* 两头的球门 */
+      var gl2;
+      for(gl2=0;gl2<2;gl2++){
+        var gzz=gl2?iz1-0.6:iz0+0.6, gsg=gl2?1:-1;
+        B.box(px-1.6,1.0,gzz,0.10,2.0,0.10,0xe8e8e2,1.1);
+        B.box(px+1.6,1.0,gzz,0.10,2.0,0.10,0xe8e8e2,1.1);
+        B.box(px,2.0,gzz,3.3,0.10,0.10,0xe8e8e2,1.1);
+        B.box(px,1.0,gzz+gsg*0.9,3.2,1.9,0.02,0xc8ccc8,0.85);   /* 网 */
+        B.box(px-1.6,1.0,gzz+gsg*0.45,0.03,1.9,0.9,0xc8ccc8,0.85);
+        B.box(px+1.6,1.0,gzz+gsg*0.45,0.03,1.9,0.9,0xc8ccc8,0.85);
+      }
       continue;
     } else if(o.k==='court'||o.k==='track'||o.k==='garden'){
       BF.quad(px-sw/2,pz-sd/2, px+sw/2,pz-sd/2, px+sw/2,pz+sd/2, px-sw/2,pz+sd/2, 0.012, base);
       if(o.k!=='garden') B.box(px,0.045,pz,sw,0.09,sd,base,1.0);
       if(o.k==='court'||o.k==='track'){
-        B.box(px,0.06,pz-sd/2,sw,0.02,0.14,0x8a949a,1.0);
-        B.box(px,0.06,pz+sd/2,sw,0.02,0.14,0x8a949a,1.0);
-        B.box(px-sw/2,0.06,pz,0.14,0.02,sd,0x8a949a,1.0);
-        B.box(px+sw/2,0.06,pz,0.14,0.02,sd,0x8a949a,1.0);
+        B.box(px,0.10,pz-sd/2,sw,0.02,0.14,0xd8d8d0,1.0);
+        B.box(px,0.10,pz+sd/2,sw,0.02,0.14,0xd8d8d0,1.0);
+        B.box(px-sw/2,0.10,pz,0.14,0.02,sd,0xd8d8d0,1.0);
+        B.box(px+sw/2,0.10,pz,0.14,0.02,sd,0xd8d8d0,1.0);
       }
+      if(o.k==='court') courtGear(B,o,px,pz,sw,sd);
       continue;
     }
 
@@ -2023,11 +2135,13 @@ function buildOutdoorGeometry(){
       var dep=2.6, colN=Math.max(4,Math.round(sw/4.2)), cn2;
       for(cn2=0;cn2<=colN;cn2++){
         var pcx=px-sw/2+(sw/colN)*cn2;
+        if(Math.abs(pcx-px)<3.2) continue;          /* 以前正中那根柱子刚好立在大门口 */
         B.box(pcx,g0/2,pz+sd/2+dep/2,0.46,g0,0.46,BRICK,1.02);
         B.box(pcx,0.16,pz+sd/2+dep/2,0.62,0.32,0.62,BASE_GREY,0.95);
       }
-      if(!DEV_HIDE.canopy){ B.box(px,g0+0.14,pz+sd/2+dep/2,sw+0.4,0.30,dep+0.5,WHITEBAND,1.02); B.box(px,g0-0.30,pz+sd/2+dep/2,sw+0.2,0.26,dep+0.3,BRICK_D,0.96); }
+      if(!DEV_HIDE.canopy){ B.box(px,g0+0.14,pz+sd/2+dep/2,sw+0.4,0.30,dep+0.5,WHITEBAND,1.02); }
       B.box(px,g0-0.30,pz+sd/2+dep/2,sw+0.2,0.26,dep+0.3,BRICK_D,0.96);
+      litWindows(o,px,pz,sw,sd,4,3.6,total);
       var fl, nfl2=4;
       for(fl=1;fl<=nfl2;fl++){
         var fy2=3.6+ (fl-0.5)*(total-3.6)/(nfl2+0.6);
@@ -2061,20 +2175,8 @@ function buildOutdoorGeometry(){
       continue;
     }
 
-    if(o.id==='garage'){
-      var rampH=0;
-      for(var rs=0;rs<4;rs++){
-        rampH=1.2-rs*0.30;
-        B.box(px-sw/2+sw/8+rs*sw/4,rampH/2,pz,sw/4,rampH,sd,0x2b3339,1.0);
-      }
-      var gc;
-      for(gc=0;gc<4;gc++){
-        var gxx=px-sw*0.44+gc*(sw*0.88/3);
-        B.box(gxx,1.5,pz+sd*0.44,0.24,3.0,0.24,0x2b343b,1.06);
-      }
-      B.box(px,1.9,pz-sd/2-0.05,sw*0.9,0.16,0.16,0x3a444b,1.0);
-      continue;
-    }
+    if(o.id==='garage'){ garageRamp(B,px,pz,sw,sd); continue; }
+    if(o.id==='garw'){ garagePed(B,px,pz,sw,sd); continue; }
     if(o.id==='bell'){
       var bh=19.0, bTop=15.2;
       B.box(px,bTop/2,pz,sw,bTop,sd,BRICK,0.98);
@@ -2098,40 +2200,58 @@ function buildOutdoorGeometry(){
       continue;
     }
     if(o.id==='dormN'||o.id==='dormS'){
+      /* 阳台开在门的对面；贴着食堂的那一段不画（以前阳台直接插进食堂的墙里） */
       var dh=OBLD_H[o.id]!==undefined?OBLD_H[o.id]:18.0;
-      var dfl, dn=Math.round(dh/3.0);
-      for(dfl=1;dfl<=dn;dfl++){
-        var dy=dfl*(dh/(dn+0.5));
-        B.box(px,dy,pz+sd/2+0.55,sw*0.97,0.16,1.1,0xd2cdc5,1.0);    /* 阳台板 */
-        B.box(px,dy+0.52,pz+sd/2+1.05,sw*0.95,0.07,0.07,0x3a444a,1.05); /* 上横杆 */
-        B.box(px,dy+0.20,pz+sd/2+1.05,sw*0.95,0.05,0.05,0x3a444a,1.0);
-        var dp, dpn=Math.max(6,Math.round(sw/0.7));
-        for(dp=0;dp<=dpn;dp++){
-          B.box(px-sw*0.475+(sw*0.95/dpn)*dp,dy+0.34,pz+sd/2+1.05,0.035,0.60,0.035,0x3a444a,1.0);
-        }
-        B.box(px,dy+1.55,pz+sd/2+0.72,sw*0.82,0.04,0.04,0xb8b2a8,1.0);
-        var cl;
-        for(cl=0;cl<5;cl++){
-          var ccx=px-sw*0.36+cl*(sw*0.72/4);
-          B.box(ccx,dy+1.18,pz+sd/2+0.72,0.5,0.72,0.06,[0x5a6c7a,0x7a6a5a,0x6a7a64,0x8a7a80,0x6a6a7a][cl],1.0);
+      var bs=(o.door==='n')?1:-1;
+      var spans=faceFreeSpans(o, bs>0?'s':'n'), sp2, dfl, dn=Math.round(dh/3.0);
+      for(sp2=0;sp2<spans.length;sp2++){
+        var sa=spans[sp2][0]*SC*U2M, sb=spans[sp2][1]*SC*U2M, sw3=sb-sa-0.3, sx3=(sa+sb)/2;
+        if(sw3<2) continue;
+        var fz3=pz+bs*sd/2;
+        for(dfl=1;dfl<=dn;dfl++){
+          var dy=dfl*(dh/(dn+0.5));
+          B.box(sx3,dy,fz3+bs*0.55,sw3,0.16,1.1,0xd2cdc5,1.0);           /* 阳台板 */
+          B.box(sx3,dy+0.52,fz3+bs*1.05,sw3*0.98,0.07,0.07,0x3a444a,1.05);
+          B.box(sx3,dy+0.20,fz3+bs*1.05,sw3*0.98,0.05,0.05,0x3a444a,1.0);
+          var dp, dpn=Math.max(6,Math.round(sw3/0.7));
+          for(dp=0;dp<=dpn;dp++) B.box(sx3-sw3*0.49+(sw3*0.98/dpn)*dp,dy+0.34,fz3+bs*1.05,0.035,0.60,0.035,0x3a444a,1.0);
+          B.box(sx3,dy+1.55,fz3+bs*0.72,sw3*0.85,0.04,0.04,0xb8b2a8,1.0);
+          var cl, cn3=Math.max(2,Math.round(sw3/5));
+          for(cl=0;cl<cn3;cl++){
+            if(hash2(dfl*7+cl,o.x)<0.35) continue;
+            var ccx=sx3-sw3*0.40+cl*(sw3*0.80/Math.max(1,cn3-1));
+            B.box(ccx,dy+1.18,fz3+bs*0.72,0.5,0.72,0.06,[0x5a6c7a,0x7a6a5a,0x6a7a64,0x8a7a80,0x6a6a7a][(cl+dfl)%5],1.0);
+          }
         }
       }
+      litWindows(o,px,pz,sw,sd,dn,3.0,dh);
     }
 
     var NO_ENT={bell:1,garage:1,garw:1,guard:1,shed:1,gear:1,trash:1};
-    if(o.id==='bell'||o.id==='canteen'||(!NO_ENT[o.id]&&sw>=16&&sd>=12)){
-      addEntrance(B, px, pz, sw, sd, o.door||'s');
-    } else if(o.id!=='garage'&&o.id!=='garw'&&o.id!=='field'&&o.id!=='court'&&o.id!=='track'&&o.id!=='garden'){
-      addSmallDoor(B, px, pz, sw, sd, o.door||'s');   /* 小房子也要有门 */
+    if(o.id==='bell'||o.id==='canteen'||o.id==='dormN'||o.id==='dormS'||(!NO_ENT[o.id]&&sw>=16&&sd>=12)){
+      addEntrance(B, px, pz, sw, sd, o.door||'s', !!o.open1f);
+    } else if(o.id!=='shed'){
+      addSmallDoor(B, px, pz, sw, sd, o.door||'s');   /* 小房子也要有门；车棚是敞开的，不要门 */
     }
 
     var hgt=OBLD_H[o.id]!==undefined?OBLD_H[o.id]:(o.id==='bell'?19:11.5);
     if(o.id==='shed'){
       B.box(px,hgt-0.14,pz,sw,0.28,sd,0x2a3238,1.0);
-      var sc;
-      for(sc=0;sc<5;sc++){
-        B.box(px-sw*0.4+sc*(sw*0.8/4),hgt/2,pz-sd*0.38,0.20,hgt,0.20,0x2b343b,1.06);
-        B.box(px-sw*0.4+sc*(sw*0.8/4),hgt/2,pz+sd*0.38,0.20,hgt,0.20,0x2b343b,1.06);
+      var sc, sn=Math.max(5,Math.round(sd/4));
+      for(sc=0;sc<=sn;sc++){
+        var szz=pz-sd*0.46+sc*(sd*0.92/sn);
+        B.box(px-sw*0.42,hgt/2,szz,0.20,hgt,0.20,0x2b343b,1.06);
+        B.box(px+sw*0.42,hgt/2,szz,0.20,hgt,0.20,0x2b343b,1.06);
+      }
+      /* 车棚里一排停着的电动车 */
+      var bk2, bkn=Math.floor(sd/1.1);
+      for(bk2=0;bk2<bkn;bk2++){
+        if(hash2(bk2,57)<0.28) continue;
+        var bz5=pz-sd/2+0.8+bk2*1.1, bcol=[0x3a4a5a,0x6a2a2a,0xd8d4cc,0x2a2e33,0x4a6a4a][bk2%5];
+        B.box(px-sw*0.10,0.55,bz5,1.55,0.42,0.30,bcol,1.0);
+        B.box(px-sw*0.10-0.62,0.32,bz5,0.12,0.56,0.08,0x111418,1.0);
+        B.box(px-sw*0.10+0.62,0.32,bz5,0.12,0.56,0.08,0x111418,1.0);
+        B.box(px-sw*0.10-0.55,1.02,bz5,0.06,0.04,0.62,0x2a2e33,1.0);
       }
       continue;
     }
@@ -2152,7 +2272,9 @@ function buildOutdoorGeometry(){
     B.box(px,2.45,pz+sd/2+0.30,Math.min(4.4,sw*0.40),0.16,0.7,0x394450,1.0);
   }
 
-  function fenceRun(fx,fz,ax,az,len,horiz){
+  /* 围墙：在三个校门处留出口子（以前墙是整圈的，门画在墙里面 5–10 米处） */
+  function fenceRun(fx,fz,len,horiz){
+    if(len<0.3) return;
     var baseH=1.5, railH=1.5, t=0.62;
     if(horiz){
       B.box(fx,baseH/2,fz,len,baseH,t,STONE,1.0);
@@ -2172,36 +2294,59 @@ function buildOutdoorGeometry(){
       for(k2=0;k2<=m3;k2++) B.box(fx, baseH+railH/2, fz-len/2+(len/m3)*k2, 0.14, railH, 0.14, 0x24512f, 1.0);
     }
   }
-  function gateModel(wx,wy,wide,tallSign,label){
+  function fenceSide(horiz, fixed, a0, a1, gaps){
+    gaps=gaps.slice().sort(function(p,q){ return p[0]-q[0]; });
+    var cur=a0, gi;
+    for(gi=0;gi<gaps.length;gi++){
+      var g0=gaps[gi][0]-gaps[gi][1], g1=gaps[gi][0]+gaps[gi][1];
+      if(g0>cur){ if(horiz) fenceRun((cur+g0)/2,fixed,g0-cur,true); else fenceRun(fixed,(cur+g0)/2,g0-cur,false); }
+      cur=Math.max(cur,g1);
+    }
+    if(a1>cur){ if(horiz) fenceRun((cur+a1)/2,fixed,a1-cur,true); else fenceRun(fixed,(cur+a1)/2,a1-cur,false); }
+  }
+  /* 校门：vert=true 时门开在东西两侧的墙上，沿 z 方向展开 */
+  function gateModel(wx,wy,wide,tallSign,vert){
     var gx=wx*SC*U2M, gz=wy*SC*U2M;
-    var pw=0.55, ph=tallSign?4.4:2.9;
-    B.box(gx-wide/2,ph/2,gz,pw,ph,pw,0xc9c2b4,1.05);
-    B.box(gx+wide/2,ph/2,gz,pw,ph,pw,0xc9c2b4,1.05);
-    B.box(gx-wide/2,ph+0.10,gz,pw*1.3,0.20,pw*1.3,0xa8a296,1.05);
-    B.box(gx+wide/2,ph+0.10,gz,pw*1.3,0.20,pw*1.3,0xa8a296,1.05);
-    var doorW=wide*0.62, dx0=gx-wide/2+pw*0.6;
-    B.box(dx0+doorW/2,1.55,gz,doorW,2.90,0.10,0x2b333a,1.0);
-    var bars=Math.max(6,Math.round(doorW/0.34)), bi;
-    for(bi=0;bi<bars;bi++){
-      B.box(dx0+(doorW/bars)*bi,1.55,gz-0.06,0.045,2.70,0.045,0x3d474f,1.0);
-    }
-    B.box(dx0+doorW/2,2.95,gz,doorW+0.10,0.10,0.14,0x3d474f,1.0);
-    B.box(dx0+doorW/2,0.22,gz,doorW+0.10,0.14,0.12,0x3d474f,1.0);
+    function put(u,y,v,w,h,dd,col,l){ if(vert) B.box(gx+v,y,gz+u,dd,h,w,col,l); else B.box(gx+u,y,gz+v,w,h,dd,col,l); }
+    var pw=0.62, ph=tallSign?4.6:3.0;
+    put(-wide/2,ph/2,0,pw,ph,pw,0xc9c2b4,1.05);                  /* 门柱 */
+    put( wide/2,ph/2,0,pw,ph,pw,0xc9c2b4,1.05);
+    put(-wide/2,ph+0.10,0,pw*1.3,0.20,pw*1.3,0xa8a296,1.05);
+    put( wide/2,ph+0.10,0,pw*1.3,0.20,pw*1.3,0xa8a296,1.05);
+    var doorW=wide*0.60, d0=-wide/2+pw*0.5;                       /* 电动伸缩门 / 铁栅门，关着 */
+    put(d0+doorW/2,1.30,0,doorW,0.10,0.12,0x3d474f,1.0);
+    put(d0+doorW/2,2.40,0,doorW,0.10,0.12,0x3d474f,1.0);
+    put(d0+doorW/2,0.20,0,doorW,0.14,0.14,0x3d474f,1.0);
+    var bars=Math.max(6,Math.round(doorW/0.30)), bi;
+    for(bi=0;bi<=bars;bi++) put(d0+(doorW/bars)*bi,1.30,0,0.045,2.30,0.045,0x2b333a,1.0);
     if(tallSign){
-      B.box(gx,ph+0.95,gz,wide*0.92,0.80,0.16,0xe8e4de,1.10);
-      B.box(gx,ph+0.95,gz+0.09,wide*0.80,0.58,0.03,0x8b3a2e,1.0);
+      var tx0=d0+doorW+0.9, n=3, ti;                              /* 闸机：三道 */
+      for(ti=0;ti<n;ti++){
+        var tu=tx0+ti*1.05;
+        put(tu,0.52,0,0.28,1.04,0.95,0x8a9298,1.08);
+        put(tu,1.05,-0.30,0.24,0.06,0.10,0x2b3b44,1.0);
+        put(tu,0.99,-0.30,0.12,0.05,0.06,0x39c08a,1.6);           /* 闸机上的小灯，常亮红/绿 */
+        put(tu+0.50,0.82,0,0.04,0.04,0.80,0x9aa0a4,1.1);         /* 拦杆 */
+      }
+      put(0,ph+0.95,0,wide*0.92,0.80,0.18,0xe8e4de,1.10);         /* 门头 */
+      put(0,ph+0.95,0.10,wide*0.80,0.58,0.03,0x8b3a2e,1.0);
+      put(0,ph+0.95,-0.10,wide*0.80,0.58,0.03,0x8b3a2e,1.0);
+    }else{
+      put(0,ph+0.25,0,wide+0.3,0.22,0.5,0xa8a296,1.05);            /* 小门的门楣 */
+      put(wide*0.25,1.15,0.09,0.10,0.10,0.06,0xc8a24a,1.3);        /* 挂锁 */
     }
-    B.box(gx,0.05,gz,wide*1.05,0.10,1.4,0x8a8a86,1.0);
-    if(label){ /* 名字只做提示，不画 */ }
+    put(0,0.05,0,wide*1.05,0.10,1.6,0x8a8a86,1.0);                 /* 门槛石 */
   }
   if(!DEV_HIDE.fence){
-    gateModel(GATE_N.x,GATE_N.y,11.0,true,'北门');
-    gateModel(GATE_W.x,GATE_W.y,6.4,false,'东小门');
-    gateModel(GATE_S.x,GATE_S.y,5.6,false,'南门');
-    fenceRun(cx,(BOUND.y0*SC*U2M),0,0,w,true);
-    fenceRun(cx,(BOUND.y1*SC*U2M),0,0,w,true);
-    fenceRun((BOUND.x0*SC*U2M),cz,0,0,d,false);
-    fenceRun((BOUND.x1*SC*U2M),cz,0,0,d,false);
+    var gN=GATE_N.x*SC*U2M, gWz=GATE_W.y*SC*U2M, gS=GATE_S.x*SC*U2M;
+    var NW=12.0, WW=5.0, SW2=5.4;
+    gateModel(GATE_N.x,GATE_N.y,NW,true,false);
+    gateModel(GATE_W.x,GATE_W.y,WW,false,true);
+    gateModel(GATE_S.x,GATE_S.y,SW2,false,false);
+    fenceSide(true,  y0, x0, x1, [[gN,NW/2+0.3]]);
+    fenceSide(true,  y1, x0, x1, [[gS,SW2/2+0.3]]);
+    fenceSide(false, x0, y0, y1, [[gWz,WW/2+0.3]]);
+    fenceSide(false, x1, y0, y1, []);
   }
 
   var grp=new THREE.Group();
@@ -2210,189 +2355,475 @@ function buildOutdoorGeometry(){
   var mF=new THREE.Mesh(BF.build(),new THREE.MeshPhongMaterial({vertexColors:true,shininess:0,specular:0x000000,flatShading:false}));
 
   grp.add(mB); grp.add(mF);
+  /* 草地 → 砖缝 → 地砖：三层几乎共面，用多边形偏移定先后（以前远处砖缝会闪出草色） */
+  function flatMesh(bb,f,u){
+    var mm=new THREE.MeshPhongMaterial({vertexColors:true,shininess:0,specular:0x000000,polygonOffset:true,polygonOffsetFactor:f,polygonOffsetUnits:u});
+    var me=new THREE.Mesh(bb.build(),mm); me.renderOrder=-1; return me;
+  }
+  if(OUTX.G.v) grp.add(flatMesh(OUTX.G,4,8));
+  if(OUTX.J.v) grp.add(flatMesh(OUTX.J,2,4));
+  /* 灯头 / 亮着的窗：MeshBasic，颜色由 lampTick() 按昼夜调 */
+  if(!GLR.lampHeadMat) GLR.lampHeadMat=new THREE.MeshBasicMaterial({vertexColors:true,fog:true});
+  if(!GLR.winLitMat) GLR.winLitMat=new THREE.MeshBasicMaterial({vertexColors:true,fog:true});
+  if(OUTX.L.v){ var mL=new THREE.Mesh(OUTX.L.build(),GLR.lampHeadMat); grp.add(mL); }
+  if(OUTX.W.v){ var mW=new THREE.Mesh(OUTX.W.build(),GLR.winLitMat); grp.add(mW); }
+  try{ addGrass(grp); }catch(e){}
   try{ if(!DEV_HIDE.sign) addGardenSign(grp); }catch(e){}
   return grp;
 }
 
-function buildTree(B, tx, tz, seed){
+/* ================= 室外布局 =================
+   以前主路、绿篱、花坛、路灯全沿 x=514 一条线摆，直接穿过篮球场、羽毛球场、行政楼和小跑道。
+   现在路走在楼与楼之间；树、灯、花坛、长椅都过一遍 outFree() 避让检查。
+   坐标都是"地图单位"（M() 换成米）。 */
+var OUTX={L:null,W:null};
+var OUT_SOLID=[];       /* 室外的实心物：{x0,y0,x1,y1}，地图单位 */
+var ROADS=[
+  [470,97,548,207],    /* 北门广场 */
+  [395,188,720,207],   /* 北侧东西向 */
+  [690,188,718,1252],  /* 东干道 */
+  [398,207,422,505],   /* 操场东侧 */
+  [352,505,394,999],   /* 西侧 */
+  [204,612,352,636],   /* 西小门 */
+  [352,987,718,999],   /* 教学楼前 */
+  [375,999,398,1290],  /* 宿舍西侧，通南门 */
+  [398,1148,548,1172], /* 两栋宿舍之间，到食堂西门 */
+  [398,1234,718,1252], /* 南宿舍门前 */
+  [718,1124,792,1142]  /* 到垃圾房 */
+];
+function M(v){ return v*SC*U2M; }
+function inRect(mx,my,r,pad){ pad=pad||0; return mx>r[0]-pad&&mx<r[2]+pad&&my>r[1]-pad&&my<r[3]+pad; }
+function onRoad(mx,my,pad){ for(var i=0;i<ROADS.length;i++) if(inRect(mx,my,ROADS[i],pad)) return true; return false; }
+function inObj(mx,my,pad,lawnOk){
+  for(var i=0;i<OBJ.length;i++){
+    var o=OBJ[i];
+    if(lawnOk&&o.k==='garden') continue;
+    if(mx>o.x-pad&&mx<o.x+o.w+pad&&my>o.y-pad&&my<o.y+o.h+pad) return true;
+  }
+  return false;
+}
+function nearGate(mx,my,r){
+  return dist2(mx,my,GATE_N.x,GATE_N.y)<r*r||dist2(mx,my,GATE_W.x,GATE_W.y)<r*r||dist2(mx,my,GATE_S.x,GATE_S.y)<r*r;
+}
+/* 楼前的柱廊 / 门廊在楼的矩形外面，也要让开 */
+function apronOf(o){
+  var p=(o.open1f?13:8);
+  if(o.k!=='roof') return null;
+  return [o.x-4,o.y-4,o.x+o.w+4,o.y+o.h+p];
+}
+function outFree(mx,my,pad,roadPad){
+  if(mx<BOUND.x0+6||my<BOUND.y0+6||mx>BOUND.x1-6||my>BOUND.y1-6) return false;
+  if(inObj(mx,my,pad)) return false;
+  if(onRoad(mx,my,roadPad===undefined?pad:roadPad)) return false;
+  if(nearGate(mx,my,24)) return false;
+  for(var i=0;i<OBJ.length;i++){ var a=apronOf(OBJ[i]); if(a&&inRect(mx,my,a,pad)) return false; }
+  for(i=0;i<OUT_SOLID.length;i++){ var q=OUT_SOLID[i]; if(mx>q.x0-pad&&mx<q.x1+pad&&my>q.y0-pad&&my<q.y1+pad) return false; }
+  return true;
+}
+function addSolidM(cx,cz,hw,hd){          /* 以米为单位登记一个实心矩形 */
+  var k=1/(SC*U2M);
+  OUT_SOLID.push({x0:(cx-hw)*k,y0:(cz-hd)*k,x1:(cx+hw)*k,y1:(cz+hd)*k});
+}
+/* 一面墙上没被别的楼挡住的区段（地图单位的 x 区间） */
+function faceFreeSpans(o,face){
+  var fy=(face==='s')?o.y+o.h:o.y, spans=[[o.x,o.x+o.w]], i, j;
+  for(i=0;i<OBJ.length;i++){
+    var b=OBJ[i]; if(b===o||b.k!=='roof') continue;
+    if(fy<b.y-2||fy>b.y+b.h+2) continue;
+    var out=[];
+    for(j=0;j<spans.length;j++){
+      var a0=spans[j][0], a1=spans[j][1];
+      if(b.x>=a1||b.x+b.w<=a0){ out.push([a0,a1]); continue; }
+      if(b.x>a0) out.push([a0,b.x-3]);
+      if(b.x+b.w<a1) out.push([b.x+b.w+3,a1]);
+    }
+    spans=out;
+  }
+  return spans;
+}
+/* 夜里亮着的窗：每栋只亮几格，位置固定（不随刷新变） */
+function litWindows(o,px,pz,sw,sd,nfl,base,total){
+  if(!OUTX.W) return;
+  var fl, k, n=Math.max(3,Math.round(sw/7));
+  for(fl=1;fl<=nfl;fl++){
+    var fy=base+(fl-0.5)*(total-base)/(nfl+0.6);
+    if(o.id==='dormN'||o.id==='dormS') fy=fl*(total/(nfl+0.5))-1.1;
+    for(k=0;k<n;k++){
+      var h=hash2(o.x*3+fl*11,k*17+o.y);
+      if(h>0.24) continue;
+      var wx=px-sw*0.44+(k+0.5)*(sw*0.88/n);
+      var side=(hash2(k,fl*5+o.x)<0.5)?1:-1;
+      OUTX.W.box(wx,fy,pz+side*(sd/2+0.115),1.5,0.78,0.02,0xffffff,1.0);
+    }
+  }
+}
+function courtGear(B,o,px,pz,sw,sd){
+  var along=(sw>sd), i;
+  if(o.id.indexOf('bad')===0){
+    /* 羽毛球网：每片场地一张 */
+    var nC=(o.id==='bad3')?3:2;
+    for(i=0;i<nC;i++){
+      var cxn=along?(px-sw/2+(i+0.5)*sw/nC):px, czn=along?pz:(pz-sd/2+(i+0.5)*sd/nC);
+      var len=along?sd*0.86:sw*0.86;
+      if(along){
+        B.box(cxn,0.78,czn,0.03,0.72,len,0xd8d8d2,0.9);
+        B.box(cxn,0.78,czn-len/2,0.06,1.55,0.06,0x3a3f44,1.0);
+        B.box(cxn,0.78,czn+len/2,0.06,1.55,0.06,0x3a3f44,1.0);
+        addSolidM(cxn,czn-len/2,0.1,0.1); addSolidM(cxn,czn+len/2,0.1,0.1);
+      }else{
+        B.box(cxn,0.78,czn,len,0.72,0.03,0xd8d8d2,0.9);
+      }
+    }
+    return;
+  }
+  /* 篮球架：长轴两头各一个 */
+  for(i=0;i<2;i++){
+    var sg=i?1:-1;
+    var hx=along?px+sg*(sw/2-0.4):px, hz=along?pz:pz+sg*(sd/2-0.4);
+    var bx=along?-sg*1.2:0, bz=along?0:-sg*1.2;
+    B.box(hx,1.6,hz,0.18,3.2,0.18,0x2f3a44,1.0);
+    B.box(hx+bx*0.5,3.1,hz+bz*0.5,along?1.2:0.12,0.10,along?0.12:1.2,0x2f3a44,1.0);
+    B.box(hx+bx,3.25,hz+bz,along?0.05:1.8,1.05,along?1.8:0.05,0xe8e8e4,1.05);   /* 篮板 */
+    B.box(hx+bx*1.18,2.95,hz+bz*1.18,0.45,0.03,0.45,0xc0502a,1.1);              /* 篮筐 */
+    addSolidM(hx,hz,0.2,0.2);
+  }
+}
+/* 地下车库车道：两侧矮墙 + 一块往下斜的黑坡 + 门头 */
+function garageRamp(B,px,pz,sw,sd){
+  var x0=px-sw/2, x1=px+sw/2;
+  B.box(px,0.45,pz-sd/2+0.15,sw,0.9,0.3,0xb8b2a8,1.0);
+  B.box(px,0.45,pz+sd/2-0.15,sw,0.9,0.3,0xb8b2a8,1.0);
+  B.box(x0+0.15,1.2,pz,0.3,2.4,sd,0xb8b2a8,1.0);
+  var n=10, i;
+  for(i=0;i<n;i++){                                   /* 东高西低 */
+    var t0=i/n, h=-0.05-(1-t0)*2.6;
+    B.box(x0+0.3+(i+0.5)*(sw-0.3)/n,h,pz,(sw-0.3)/n+0.02,0.1,sd-0.6,0x2b3339,1.0);
+    B.box(x0+0.3+(i+0.5)*(sw-0.3)/n,h+0.055,pz,0.10,0.01,sd-0.6,0xc8b24a,1.1);
+  }
+  B.box(x0+1.4,1.3,pz,2.4,2.6,sd-0.6,0x05080a,1.0);   /* 坡底的黑洞 */
+  B.box(x0+3.0,2.8,pz,3.6,0.24,sd+0.4,0xc9c4bb,1.05); /* 入口雨棚 */
+  B.box(x0+3.0,3.3,pz+sd/2+0.25,3.4,0.6,0.08,0x1d3a5a,1.1);   /* 蓝色"地下车库"牌 */
+  B.box(x1-0.4,1.2,pz-sd/2+0.8,0.12,2.4,0.12,0x8a9298,1.0);    /* 道闸 */
+  B.box(x1-0.4,1.0,pz,0.08,0.08,sd-1.6,0xd84a3a,1.1);
+}
+/* 地下车库人行口：一个玻璃顶的楼梯间（以前高度是 0，地面上什么都没有） */
+function garagePed(B,px,pz,sw,sd){
+  var w=Math.min(sw,7.0), d=Math.min(sd,5.0), h=3.0;
+  B.box(px,h/2,pz,w,h,d,0x9a958c,1.0);
+  B.box(px,h+0.12,pz,w+0.4,0.24,d+0.4,0x5a646a,1.0);
+  B.box(px,h-0.5,pz+d/2+0.03,w*0.92,0.8,0.04,0x2a3a44,1.1);   /* 窗带 */
+  B.box(px,1.05,pz+d/2+0.04,1.6,2.1,0.06,0x2a3136,1.0);       /* 门 */
+  B.box(px,2.3,pz+d/2+0.06,1.4,0.24,0.04,0x1d3a5a,1.2);       /* 牌子 */
+  B.box(px+0.45,2.3,pz+d/2+0.09,0.3,0.12,0.02,0x2fae6a,1.8);
+  addSolidM(px,pz,w/2,d/2);
+}
+function buildTree(B, tx, tz, seed, lod){
   var r=function(k){ return hash2(seed*13+k, k*7+3); };
   var th=2.0+r(17)*1.3;                    /* 分枝高度 2.0–3.3m */
-  var lean=(r(23)-0.5)*0.7;                /* 整株的倾斜 */
+  var lean=(r(23)-0.5)*0.5;
   var lay=[[0x2b3f2e,0x36523a,0x3f5f3f],[0x264a2c,0x2f5733,0x3a6a3c],[0x2f4a32,0x3d5f3e,0x4a7048]][Math.floor(r(11)*3)];
   var i;
   for(i=0;i<3;i++){
     var sy=th*(i+0.5)/3;
-    var w=0.52-i*0.11;
+    var w=0.42-i*0.08;
     B.box(tx+lean*sy*0.30, sy, tz+lean*sy*0.18, w, th/3+0.03, w, 0x3d3227, 0.95+i*0.03);
   }
-  for(i=0;i<4;i++){
-    var a=i*1.571+r(30+i)*1.1;
-    var len=1.1+r(40+i)*1.1;
+  B.box(tx,0.03,tz,1.1,0.06,1.1,0x6a6458,1.0);              /* 树池 */
+  var nb=lod>0?4:2;
+  for(i=0;i<nb;i++){
+    var a=i*(6.283/nb)+r(30+i)*1.1;
+    var len=1.0+r(40+i)*1.0;
     var up=0.34+r(50+i)*0.36;
-    var sk, segs=5;
+    var sk, segs=lod>0?4:2;
     for(sk=0;sk<segs;sk++){
       var t2=(sk+0.5)/segs;
-      var bx=tx+Math.cos(a)*len*t2;
-      var bz=tz+Math.sin(a)*len*t2;
-      var by=th+len*up*t2*0.95;
-      var bw=0.22*(1-t2*0.50);
-      B.box(bx, by, bz, bw, bw*1.25, bw, 0x372d23, 0.93+t2*0.06);
+      var bw=0.18*(1-t2*0.5);
+      B.box(tx+Math.cos(a)*len*t2, th+len*up*t2*0.95, tz+Math.sin(a)*len*t2, bw, bw*1.25, bw, 0x372d23, 0.93+t2*0.06);
     }
   }
-  var cw=3.8+r(41)*2.0;
-  for(i=0;i<10;i++){
+  var cw=3.6+r(41)*2.0, nc=lod>1?11:(lod>0?8:5);
+  for(i=0;i<nc;i++){
     var ca=r(60+i)*6.283;
-    var cr=(0.20+r(70+i)*0.62)*cw*0.5;
-    var cy=th+1.15+r(80+i)*2.5;
-    var cs=(0.50+r(90+i)*0.50)*cw*0.44;
-    B.box(tx+Math.cos(ca)*cr, cy, tz+Math.sin(ca)*cr,
-          cs, cs*0.76, cs, lay[i%3], 0.93+r(100+i)*0.16);
+    var cr=(0.15+r(70+i)*0.55)*cw*0.5;
+    var cy=th+1.0+r(80+i)*2.3;
+    var cs=(0.55+r(90+i)*0.50)*cw*0.46;
+    B.box(tx+Math.cos(ca)*cr, cy, tz+Math.sin(ca)*cr, cs, cs*0.76, cs, lay[i%3], 0.93+r(100+i)*0.16);
   }
 }
 function addOutdoorProps(B, BF, x0, y0, x1, y1){
-  var i, seed;
-  function freeAt(mx,my){
-    var i,o;
-    for(i=0;i<OBJ.length;i++){
-      o=OBJ[i];
-      if(mx>o.x-16&&mx<o.x+o.w+16&&my>o.y-16&&my<o.y+o.h+16) return false;
+  var i, j, q=QUALITY|0;
+  /* ---- 草地：整片打底，按 6 米一格做一点深浅 ---- */
+  var gs=6, gx, gz;
+  for(gx=x0; gx<x1; gx+=gs){
+    for(gz=y0; gz<y1; gz+=gs){
+      var ex=Math.min(gx+gs,x1), ez=Math.min(gz+gs,y1);
+      var hv=hash2((gx*7)|0,(gz*13)|0);
+      OUTX.G.quad(gx,ez, ex,ez, ex,gz, gx,gz, 0.000, shadeHex(hv<0.5?0x45603a:0x4d6a40, 0.86+hv*0.22));
     }
-    if(Math.abs(mx-GATE_N.x)<24) return false;
-    return true;
   }
+  /* ---- 路和楼前铺装：1.2 米一块的方砖，砖缝深一点 ---- */
+  function pave(r,col){
+    var ax=M(r[0]), az=M(r[1]), bx=M(r[2]), bz=M(r[3]), t=1.2, a, b;
+    OUTX.J.quad(ax,bz, bx,bz, bx,az, ax,az, 0.004, 0x55534e);
+    for(a=ax; a<bx-0.05; a+=t){
+      for(b=az; b<bz-0.05; b+=t){
+        var qa=a+0.04, qb=Math.min(a+t,bx)-0.04, qc=b+0.04, qd=Math.min(b+t,bz)-0.04;
+        if(qb<=qa||qd<=qc) continue;
+        var sh=0.92+0.12*hash2((a*5)|0,(b*7)|0);
+        BF.quad(qa,qd, qb,qd, qb,qc, qa,qc, 0.008, shadeHex(col,sh));
+      }
+    }
+  }
+  for(i=0;i<ROADS.length;i++) pave(ROADS[i],0x8f8b84);
+  for(i=0;i<OBJ.length;i++){ var ap=apronOf(OBJ[i]); if(ap&&OBJ[i].id!=='garage') pave(ap,0x9a958d); }
+  /* ---- 路缘石：只在路边挨着草地的地方立 ---- */
+  function paved(mx,my){
+    if(onRoad(mx,my,0)) return true;
+    for(var k=0;k<OBJ.length;k++){ var a2=apronOf(OBJ[k]); if(a2&&inRect(mx,my,a2,0)) return true; if(OBJ[k].k!=='roof'&&inRect(mx,my,[OBJ[k].x,OBJ[k].y,OBJ[k].x+OBJ[k].w,OBJ[k].y+OBJ[k].h],0)) return true; }
+    return false;
+  }
+  for(i=0;i<ROADS.length;i++){
+    var r=ROADS[i], e;
+    var edges=[[r[0],r[1],r[2],r[1],0,-1],[r[0],r[3],r[2],r[3],0,1],[r[0],r[1],r[0],r[3],-1,0],[r[2],r[1],r[2],r[3],1,0]];
+    for(e=0;e<4;e++){
+      var E=edges[e], len=Math.hypot(E[2]-E[0],E[3]-E[1]), st=4, run0=-1, k2;
+      var N=Math.max(1,Math.floor(len/st));
+      for(k2=0;k2<=N;k2++){
+        var tt=k2/N, sx=E[0]+(E[2]-E[0])*tt, sy=E[1]+(E[3]-E[1])*tt;
+        var outside=!paved(sx+E[4]*3,sy+E[5]*3)&&sx>BOUND.x0+3&&sx<BOUND.x1-3&&sy>BOUND.y0+3&&sy<BOUND.y1-3;
+        if(outside&&run0<0) run0=tt;
+        if((!outside||k2===N)&&run0>=0){
+          var t1=outside?tt:(k2-1)/N;
+          if(t1>run0){
+            var ax3=E[0]+(E[2]-E[0])*run0, ay3=E[1]+(E[3]-E[1])*run0, bx3=E[0]+(E[2]-E[0])*t1, by3=E[1]+(E[3]-E[1])*t1;
+            var cxm=M((ax3+bx3)/2), czm=M((ay3+by3)/2);
+            if(E[4]===0) B.box(cxm,0.07,czm,M(Math.abs(bx3-ax3))+0.15,0.14,0.16,0xb4b0a6,1.0);
+            else B.box(cxm,0.07,czm,0.16,0.14,M(Math.abs(by3-ay3))+0.15,0xb4b0a6,1.0);
+          }
+          run0=-1;
+        }
+      }
+    }
+  }
+
+  /* ---- 花园：雕塑 + 校训牌（都登记成实心，以前能直接穿过去） ---- */
   (function(){
-    var gx=535*SC*U2M, gz=1040*SC*U2M;
+    var gx=M(535), gz=M(1040);
     B.box(gx,0.30,gz,24.0,0.60,3.0,0xb8b2a8,1.0);
+    addSolidM(gx,gz,12.0,1.5);
     var sx3=gx-12.0;
     B.box(sx3,1.1,gz,0.30,2.2,0.30,0x8e9498,1.05);
     B.box(sx3+0.8,1.95,gz,2.0,0.24,0.24,0x8e9498,1.05);
     B.box(sx3-0.8,1.75,gz,1.8,0.22,0.22,0x9aa0a4,1.0);
     B.box(sx3,0.30,gz,2.8,0.42,2.8,0xa8a298,1.0);
+    addSolidM(sx3,gz,1.4,1.4);
+    addSolidM(gx,gz+1.6,5.8,0.5);
+    /* 花园里的小径：十字 */
+    BF.quad(M(400),M(1036), M(670),M(1036), M(670),M(1030), M(400),M(1030), 0.014, 0x9a948a);
+    BF.quad(M(532),M(1078), M(538),M(1078), M(538),M(1000), M(532),M(1000), 0.014, 0x9a948a);
   })();
 
+  /* ---- 花坛：只放在草地上 ---- */
+  var beds=[[440,1016],[630,1016],[440,1062],[630,1062],[462,1008],[608,1008],[740,560],[740,760],[330,560],[660,140],[440,145]];
+  var flowerCols=[0xb24a4a,0xc8a24a,0xa85a8a,0xd8d4e8,0xc86a3a];
+  for(i=0;i<beds.length;i++){
+    var fmx=beds[i][0], fmy=beds[i][1];
+    if(!inObj(fmx,fmy,0,true)&&!outFree(fmx,fmy,4,3)&&!(inRect(fmx,fmy,[400,1000,670,1078],0))) continue;
+    if(onRoad(fmx,fmy,3)) continue;
+    var fx0=M(fmx), fz0=M(fmy);
+    B.box(fx0,0.20,fz0,2.8,0.40,1.4,0x8a8478,1.0);
+    B.box(fx0,0.42,fz0,2.5,0.06,1.15,0x3a2b22,1.0);
+    var fj;
+    for(fj=0;fj<(q>0?14:7);fj++){
+      var fxx=fx0-1.1+(fj%7)*0.36, fzz=fz0+(fj<7?-0.25:0.25)+(hash2(i,fj)-0.5)*0.12;
+      B.box(fxx,0.52,fzz,0.13,0.12,0.13,flowerCols[(i+fj)%5],1.05);
+      B.box(fxx,0.46,fzz,0.06,0.10,0.06,0x4a6a3a,1.0);
+    }
+    addSolidM(fx0,fz0,1.4,0.7);
+  }
+
+  /* ---- 旗杆：北门广场东侧 ---- */
   (function(){
-    var cs=20, gx, gz, a, b;
-    for(gx=x0; gx<x1; gx+=cs){
-      for(gz=y0; gz<y1; gz+=cs){
-        var ex=Math.min(gx+cs,x1), ez=Math.min(gz+cs,y1);
-        BF.quad(gx,ez, ex,ez, ex,gz, gx,gz, 0.000, 0x4a4844);
-        var n=10, bwx=(ex-gx)/n, bzw=(ez-gz)/n, m=0.07;
-        var checker=(((gx/20)|0)+((gz/20)|0))&1;
-        for(a=0;a<n;a++){
-          for(b=0;b<n;b++){
-            var qx0=gx+a*bwx+m, qx1=gx+(a+1)*bwx-m;
-            var qz0=gz+b*bzw+m, qz1=gz+(b+1)*bzw-m;
-            if(qx1<=qx0||qz1<=qz0) continue;
-            var shf=0.92+0.14*hash2((gx+a*7)|0, (gz+b*13)|0);
-            BF.quad(qx0,qz1, qx1,qz1, qx1,qz0, qx0,qz0, 0.004,
-                    shadeHex(checker?0x9c9891:0x908c86, shf));
-          }
-        }
+    var fx=M(538), fz=M(160);
+    B.box(fx,0.15,fz,2.2,0.30,2.2,0xb2ada4,1.0);
+    B.box(fx,0.38,fz,1.4,0.16,1.4,0xc2bdb4,1.0);
+    B.box(fx,5.2,fz,0.16,10.4,0.16,0xb8bcbe,1.06);
+    B.box(fx+0.8,9.6,fz,1.6,1.0,0.03,0xc0362c,1.0);
+    addSolidM(fx,fz,1.1,1.1);
+  })();
+
+  /* ---- 宣传栏：教学楼前、行政楼东侧 ---- */
+  function board(mx,my,rotZ){
+    var bx=M(mx), bz=M(my);
+    if(rotZ){
+      B.box(bx,1.35,bz,0.12,1.5,4.2,0x2a3238,1.0);
+      B.box(bx-0.07,1.35,bz,0.03,1.3,4.0,0xd8d2c4,1.0);
+      B.box(bx,2.20,bz,0.5,0.12,4.5,0x8b3a2e,1.0);
+      B.box(bx,0.30,bz-2.0,0.10,0.6,0.10,0x2a3238,1.0); B.box(bx,0.30,bz+2.0,0.10,0.6,0.10,0x2a3238,1.0);
+      addSolidM(bx,bz,0.2,2.1);
+    }else{
+      B.box(bx,1.35,bz,4.2,1.5,0.12,0x2a3238,1.0);
+      B.box(bx,1.35,bz-0.07,4.0,1.3,0.03,0xd8d2c4,1.0);
+      B.box(bx,2.20,bz,4.5,0.12,0.5,0x8b3a2e,1.0);
+      addSolidM(bx,bz,2.1,0.2);
+    }
+  }
+  board(686,560,true);
+  board(686,880,true);
+
+  /* ---- 路灯：沿路每隔一段一盏，灯头单独一个自发光网格 ---- */
+  var lampSeen=[];
+  function lampOK(mx,my){
+    for(var k=0;k<lampSeen.length;k++) if(dist2(mx,my,lampSeen[k][0],lampSeen[k][1])<70*70) return false;
+    return outFree(mx,my,3,2);
+  }
+  for(i=0;i<ROADS.length;i++){
+    var rr=ROADS[i], horiz=(rr[2]-rr[0])>(rr[3]-rr[1]);
+    var L0=horiz?rr[0]:rr[1], L1=horiz?rr[2]:rr[3], st2=90, t3;
+    for(t3=L0+20; t3<L1-10; t3+=st2){
+      var cand=horiz?[[t3,rr[1]-5],[t3,rr[3]+5]]:[[rr[0]-5,t3],[rr[2]+5,t3]];
+      for(j=0;j<2;j++){
+        var lmx=cand[(j+i)%2][0], lmy=cand[(j+i)%2][1];
+        if(!lampOK(lmx,lmy)) continue;
+        lampSeen.push([lmx,lmy]);
+        var lx=M(lmx), lz=M(lmy);
+        B.box(lx,0.20,lz,0.36,0.40,0.36,0x3a4146,1.0);
+        B.box(lx,2.45,lz,0.13,4.9,0.13,0x252c31,1.0);
+        B.box(lx,4.86,lz,0.62,0.12,0.36,0x2a3238,1.0);
+        OUTX.L.box(lx,4.76,lz,0.50,0.08,0.26,0xffffff,1.0);
+        OUT_LAMPS.push({x:lx,y:4.76,z:lz});
+        addSolidM(lx,lz,0.2,0.2);
+        break;
       }
     }
-  })();
-
-  function path(x1,z1,x2,z2,wd,col){
-    var mx=(x1+x2)/2, mz=(z1+z2)/2;
-    var dx=Math.abs(x2-x1)||wd, dz=Math.abs(z2-z1)||wd;
-    BF.quad(mx-dx/2,mz-dz/2, mx+dx/2,mz-dz/2, mx+dx/2,mz+dz/2, mx-dx/2,mz+dz/2, 0.006, col);
   }
-  var P=0.006;
-  BF.quad(514*SC*U2M-4, 130*SC*U2M, 514*SC*U2M+4, 130*SC*U2M,
-          514*SC*U2M+4, 880*SC*U2M, 514*SC*U2M-4, 880*SC*U2M, P, 0x44464a);
-  BF.quad(300*SC*U2M, 880*SC*U2M-3.5, 720*SC*U2M, 880*SC*U2M-3.5,
-          720*SC*U2M, 880*SC*U2M+3.5, 300*SC*U2M, 880*SC*U2M+3.5, P, 0x44464a);
-  BF.quad(514*SC*U2M-3.5, 880*SC*U2M, 514*SC*U2M+3.5, 880*SC*U2M,
-          514*SC*U2M+3.5, 1250*SC*U2M, 514*SC*U2M-3.5, 1250*SC*U2M, P, 0x44464a);
 
-  (function(){
-    var lz;
-    for(lz=160; lz<860; lz+=16){
-      BF.quad(514*SC*U2M-0.12, lz*SC*U2M, 514*SC*U2M+0.12, lz*SC*U2M,
-              514*SC*U2M+0.12, (lz+7)*SC*U2M, 514*SC*U2M-0.12, (lz+7)*SC*U2M, 0.010, 0xc8b24a);
+  /* ---- 长椅 + 垃圾桶 ---- */
+  var benchSpots=[[420,1020],[650,1020],[420,1070],[650,1070],[730,300],[730,640],[730,960],[380,700],[340,250],[600,1210]];
+  for(i=0;i<benchSpots.length;i++){
+    var bmx=benchSpots[i][0], bmy=benchSpots[i][1];
+    var inGarden=inRect(bmx,bmy,[400,1000,670,1078],0);
+    if(!inGarden&&!outFree(bmx,bmy,3,1)) continue;
+    var px2=M(bmx), pz2=M(bmy);
+    B.box(px2,0.44,pz2,2.0,0.09,0.52,0x6a4a2e,1.0);
+    B.box(px2,0.72,pz2-0.22,2.0,0.42,0.08,0x6a4a2e,0.94);
+    B.box(px2-0.85,0.22,pz2,0.09,0.44,0.46,0x2a2622,0.9);
+    B.box(px2+0.85,0.22,pz2,0.09,0.44,0.46,0x2a2622,0.9);
+    addSolidM(px2,pz2,1.0,0.3);
+    B.box(px2+1.5,0.44,pz2,0.55,0.88,0.55,0x2f5a3a,1.0);
+    B.box(px2+1.5,0.90,pz2,0.60,0.06,0.60,0x272e33,1.0);
+    addSolidM(px2+1.5,pz2,0.3,0.3);
+  }
+
+  /* ---- 绿篱：分段，中间留口子，实心 ---- */
+  function hedgeSeg(ax,az,bx,bz){
+    var hx=(ax+bx)/2, hz=(az+bz)/2;
+    var hw=Math.max(0.7,Math.abs(bx-ax)), hd=Math.max(0.7,Math.abs(bz-az));
+    B.box(hx,0.42,hz,hw,0.84,hd,0x2c4a30,0.96);
+    B.box(hx,0.88,hz,hw*0.96,0.10,hd*0.96,0x385a38,1.06);
+    addSolidM(hx,hz,hw/2,hd/2);
+  }
+  function hedgeLine(mxa,mya,mxb,myb){
+    var len=Math.hypot(mxb-mxa,myb-mya), seg=36, gap=18, t4;
+    for(t4=0;t4+seg<=len;t4+=seg+gap){
+      var ta=t4/len, tb=(t4+seg)/len;
+      var ax4=mxa+(mxb-mxa)*ta, ay4=mya+(myb-mya)*ta, bx4=mxa+(mxb-mxa)*tb, by4=mya+(myb-mya)*tb;
+      var ok=true, s5;
+      for(s5=0;s5<=4;s5++){ var u=s5/4; if(!outFree(ax4+(bx4-ax4)*u,ay4+(by4-ay4)*u,2,1)){ ok=false; break; } }
+      if(ok) hedgeSeg(M(ax4),M(ay4),M(bx4),M(by4));
     }
-  })();
+  }
+  hedgeLine(724,215,724,1110);      /* 东干道东侧 */
+  hedgeLine(684,215,684,505);
+  hedgeLine(210,110,210,600);       /* 西墙内侧 */
+  hedgeLine(820,110,820,1280);      /* 东墙内侧 */
+  hedgeLine(420,1284,820,1284);     /* 南墙内侧 */
 
-  (function(){
-    var bp, spots=[[492,240],[536,240],[492,420],[536,420],[492,600],[536,600],[492,780],[536,780]];
-    for(bp=0;bp<spots.length;bp++){
-      var fx0=spots[bp][0]*SC*U2M, fz0=spots[bp][1]*SC*U2M;
-      B.box(fx0,0.20,fz0,2.6,0.40,1.2,0x8a8478,1.0);        /* 池壁 */
-      B.box(fx0,0.42,fz0,2.3,0.06,0.95,0x3a2b22,1.0);        /* 土 */
-      var fj;
-      for(fj=0;fj<7;fj++){
-        var fxx=fx0-1.0+fj*0.34, fzz=fz0+(fj%2?0.22:-0.20);
-        B.box(fxx,0.50,fzz,0.16,0.14,0.16,[0xb24a4a,0xc8a24a,0xa85a8a][fj%3],1.05);
-        B.box(fxx,0.60,fzz,0.10,0.10,0.10,0x4a6a3a,1.0);
+  /* ---- 树：沿路两侧一排 + 草地上零散几丛 ---- */
+  var maxTrees=[45,100,170][q]||100, trees=[], lod=q;
+  function treeOK(mx,my){
+    if(!outFree(mx,my,10,7)) return false;
+    for(var k=0;k<trees.length;k++) if(dist2(mx,my,trees[k][0],trees[k][1])<26*26) return false;
+    for(k=0;k<lampSeen.length;k++) if(dist2(mx,my,lampSeen[k][0],lampSeen[k][1])<16*16) return false;
+    return true;
+  }
+  for(i=0;i<ROADS.length&&trees.length<maxTrees*0.65;i++){
+    var r2=ROADS[i], hz2=(r2[2]-r2[0])>(r2[3]-r2[1]);
+    var A0=hz2?r2[0]:r2[1], A1=hz2?r2[2]:r2[3], t5;
+    for(t5=A0+14; t5<A1-8 && trees.length<maxTrees*0.65; t5+=34){
+      var cs2=hz2?[[t5,r2[1]-12],[t5,r2[3]+12]]:[[r2[0]-12,t5],[r2[2]+12,t5]];
+      for(j=0;j<2;j++){
+        if(treeOK(cs2[j][0],cs2[j][1])) trees.push(cs2[j]);
       }
     }
-  })();
-
-  function hedge(x1,z1,x2,z2){
-    var hx=(x1+x2)/2, hz=(z1+z2)/2;
-    var hw=Math.abs(x2-x1)||0.7, hd=Math.abs(z2-z1)||0.7;
-    B.box(hx,0.42,hz,Math.max(0.7,hw),0.84,Math.max(0.7,hd),0x2c4a30,0.96);
-    B.box(hx,0.88,hz,Math.max(0.7,hw)*0.96,0.10,Math.max(0.7,hd)*0.96,0x385a38,1.06);
   }
-  var gp=GATE_N.x*SC*U2M, gz0=150*SC*U2M, gz1=860*SC*U2M;
-  hedge(gp-5.2,gz0, gp-5.2,gz1);
-  hedge(gp+5.2,gz0, gp+5.2,gz1);
-  hedge(300*SC*U2M, 872*SC*U2M, 700*SC*U2M, 872*SC*U2M);
+  for(i=0;i<900&&trees.length<maxTrees;i++){
+    var tmx=BOUND.x0+10+hash2(i,211)*(BOUND.x1-BOUND.x0-20);
+    var tmy=BOUND.y0+10+hash2(i,223)*(BOUND.y1-BOUND.y0-20);
+    if(treeOK(tmx,tmy)) trees.push([tmx,tmy]);
+  }
+  for(i=0;i<trees.length;i++){
+    var tx=M(trees[i][0]), tz=M(trees[i][1]);
+    buildTree(B,tx,tz,i*7+3,lod);
+    addSolidM(tx,tz,0.3,0.3);
+  }
+  OUTX.treeN=trees.length;
 
-  (function(){
-    var fx=gp+11, fz=300*SC*U2M;
-    B.box(fx,4.2,fz,0.22,8.4,0.22,0xb8bcbe,1.06);
-    B.box(fx,7.9,fz,1.6,1.0,0.05,0xc0362c,1.0);
-    B.box(fx,0.15,fz,1.6,0.30,1.6,0xb2ada4,1.0);
-  })();
-
-  (function(){
-    var bx0=572*SC*U2M, bz0=230*SC*U2M, bi;
-    for(bi=0;bi<10;bi++){
-      var bxx=bx0+0.55+((bi%2)?0.34:0), bzz=bz0+bi*1.5;
-      B.box(bxx,0.55,bzz,0.10,0.72,1.15,0x3a3f44,1.0);
-      B.box(bxx,0.30,bzz-0.50,0.08,0.60,0.08,0x22262a,1.0);
-      B.box(bxx,0.30,bzz+0.50,0.08,0.60,0.08,0x22262a,1.0);
-    }
-  })();
-
-  for(var shrubSeed=0; shrubSeed<80; shrubSeed++){
-    var smx=BOUND.x0+12+hash2(shrubSeed,131)*(BOUND.x1-BOUND.x0-24);
-    var smy=BOUND.y0+12+hash2(shrubSeed,137)*(BOUND.y1-BOUND.y0-24);
-    if(!freeAt(smx,smy)) continue;
-    var stx=smx*SC*U2M, stz=smy*SC*U2M;
-    var si;
+  /* ---- 灌木：草地上一小团一小团 ---- */
+  var shrubN=[10,24,40][q]||24, made=0;
+  for(i=0;i<400&&made<shrubN;i++){
+    var smx=BOUND.x0+12+hash2(i,131)*(BOUND.x1-BOUND.x0-24);
+    var smy=BOUND.y0+12+hash2(i,137)*(BOUND.y1-BOUND.y0-24);
+    if(!outFree(smx,smy,6,4)) continue;
+    var stx=M(smx), stz=M(smy), si;
     for(si=0;si<3;si++){
-      var sc2=0.55+hash2(shrubSeed*3+si,149)*0.45;
+      var sc2=0.55+hash2(i*3+si,149)*0.45;
       B.box(stx+(si-1)*0.42, sc2*0.5, stz+(si%2?0.30:-0.26),
             sc2*1.15, sc2*0.95, sc2*1.15, si%2?0x2a4a2e:0x315a34, 0.95+si*0.04);
     }
-    if(shrubSeed>26) break;
+    addSolidM(stx,stz,0.8,0.6);
+    made++;
   }
-
-  var lampSpots=[[514,150],[514,300],[514,470],[514,640],[514,820],[514,990],
-                 [300,560],[760,560],[760,760],[760,980],[300,980],[420,1060]];
-  for(i=0;i<lampSpots.length;i++){
-    var lx=lampSpots[i][0]*SC*U2M, lz=lampSpots[i][1]*SC*U2M;
-    if(lx<x0+3||lx>x1-3||lz<y0+3||lz>y1-3) continue;
-    B.box(lx,2.35,lz,0.16,4.7,0.16,0x252c31,1.0);
-    B.box(lx,4.72,lz,0.62,0.14,0.34,0x2a3238,1.0);
-    B.box(lx,4.60,lz,0.50,0.10,0.24,0x9fb6c4,1.0);
+}
+/* 草丛：一个 InstancedMesh，一次绘制；"流畅"画质不画 */
+function addGrass(grp){
+  var q=QUALITY|0; if(q<1) return;
+  var N=q>1?9000:4200;
+  var geo=new THREE.BufferGeometry();
+  var P=[], C=[], k;
+  for(k=0;k<3;k++){
+    var a=k*1.047, cx=Math.cos(a)*0.09, cz=Math.sin(a)*0.09;
+    P.push(-cx,0,-cz, cx,0,cz, 0,0.19,0);
+    C.push(0.55,0.62,0.45, 0.55,0.62,0.45, 0.85,0.92,0.70);
   }
-  var props=[[300,520,0],[620,520,0],[360,1050,0],[700,1050,1],[300,700,1],[440,200,0],[690,430,1]];
-  for(i=0;i<props.length;i++){
-    var px2=props[i][0]*SC*U2M, pz2=props[i][1]*SC*U2M;
-    if(px2<x0+3||px2>x1-3||pz2<y0+3||pz2>y1-3) continue;
-    if(props[i][2]===0){
-      B.box(px2,0.44,pz2,2.0,0.09,0.52,0x3a342c,1.0);
-      B.box(px2,0.72,pz2-0.22,2.0,0.42,0.08,0x3a342c,0.94);
-      B.box(px2-0.85,0.22,pz2,0.09,0.44,0.46,0x2a2622,0.9);
-      B.box(px2+0.85,0.22,pz2,0.09,0.44,0.46,0x2a2622,0.9);
-    }else{
-      B.box(px2,0.44,pz2,0.62,0.88,0.62,0x333a3d,1.0);
-      B.box(px2,0.90,pz2,0.66,0.06,0.66,0x272e33,1.0);
-    }
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(P,3));
+  geo.setAttribute('color',new THREE.Float32BufferAttribute(C,3));
+  geo.computeVertexNormals();
+  var mat=new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide});
+  var im=new THREE.InstancedMesh(geo,mat,N);
+  var m4=new THREE.Matrix4(), qq=new THREE.Quaternion(), sv=new THREE.Vector3(), pv=new THREE.Vector3(), up=new THREE.Vector3(0,1,0);
+  var col=new THREE.Color(), n=0, tries=0;
+  while(n<N&&tries<N*4){
+    tries++;
+    var mx=BOUND.x0+6+Math.random()*(BOUND.x1-BOUND.x0-12), my=BOUND.y0+6+Math.random()*(BOUND.y1-BOUND.y0-12);
+    if(inObj(mx,my,2,false)||onRoad(mx,my,1)) continue;
+    var skip=false;
+    for(var i=0;i<OBJ.length;i++){ var a2=apronOf(OBJ[i]); if(a2&&inRect(mx,my,a2,1)){ skip=true; break; } }
+    if(skip) continue;
+    pv.set(M(mx),0,M(my));
+    qq.setFromAxisAngle(up,Math.random()*6.283);
+    var s=0.7+Math.random()*0.9; sv.set(s,s*(0.8+Math.random()*0.6),s);
+    m4.compose(pv,qq,sv);
+    im.setMatrixAt(n,m4);
+    col.setRGB(0.40+Math.random()*0.14,0.52+Math.random()*0.14,0.30+Math.random()*0.08);
+    im.setColorAt(n,col);
+    n++;
   }
+  im.count=n;
+  im.instanceMatrix.needsUpdate=true;
+  if(im.instanceColor) im.instanceColor.needsUpdate=true;
+  im.frustumCulled=false;
+  grp.add(im);
 }
 function clearWorldMesh(){
   var i;
@@ -2403,6 +2834,7 @@ function clearWorldMesh(){
     if(g.children){ for(var k=0;k<g.children.length;k++) disposeGroup(g.children[k]); }
   }
   if(GLR.roamFig){ GLR.scene.remove(GLR.roamFig); GLR.roamFig=null; }
+  if(typeof TR!=='undefined'&&TR.g){ try{ GLR.scene.remove(TR.g); }catch(e){} TR.g=null; TR.key=''; }
   if(GLR.roomMesh){ GLR.scene.remove(GLR.roomMesh); disposeGroup(GLR.roomMesh); GLR.roomMesh=null; }
   if(GLR.outMesh){ GLR.scene.remove(GLR.outMesh); disposeGroup(GLR.outMesh); GLR.outMesh=null; }
   if(GLR.roomLights){
@@ -2526,27 +2958,44 @@ function anfxSpawn(kind,wx,wy){
     for(i=0;i<4;i++) anfxBox(grp,hm,0.055,0.05,0.22,-0.12+i*0.08,0.16,0.22);
     grp.position.set(p.x,0,p.z);
   } else if(kind==='leak'){
-    var wm=anfxMat(0x1b2428,0.85);
+    /* 水渍和滴水都落在判定点上（以前各随机各的） */
+    var wm=anfxMat(0x1b2428,0.85), pts=(AN.data&&AN.data.pts)||[{x:wx,y:wy}];
     for(i=0;i<5;i++){
-      var pq=new THREE.Mesh(new THREE.PlaneGeometry(1.6,1.6),wm);
+      var lp2=anfxW2S(pts[i%pts.length].x,pts[i%pts.length].y);
+      var pq=new THREE.Mesh(new THREE.CircleGeometry(0.9+Math.random()*0.3,12),wm);
       pq.rotation.x=-Math.PI/2;
-      pq.position.set(p.x+(Math.random()-0.5)*4, 0.012, p.z+(Math.random()-0.5)*4);
+      pq.position.set(lp2.x, 0.012, lp2.z);
       grp.add(pq); ANFX.items.push(pq);
     }
     var dm2=anfxMat(0x8fa6b0,0.55);
-    for(i=0;i<14;i++){
-      ANFX.items.push(anfxBox(grp,dm2,0.03,0.28,0.03,p.x+(Math.random()-0.5)*4,-Math.random()*2.6,p.z+(Math.random()-0.5)*4));
+    for(i=0;i<15;i++){
+      var lp3=anfxW2S(pts[i%pts.length].x,pts[i%pts.length].y);
+      ANFX.items.push(anfxBox(grp,dm2,0.03,0.28,0.03,lp3.x+(Math.random()-0.5)*0.6,Math.random()*2.6,lp3.z+(Math.random()-0.5)*0.6));
+    }
+    for(i=0;i<5;i++){
+      var lp4=anfxW2S(pts[i].x,pts[i].y);
+      anfxBox(grp,anfxMat(0x2a2420,0.75),0.9,0.01,0.6,lp4.x,2.985,lp4.z);    /* 天花板上的水渍 */
     }
   } else if(kind==='rite'){
-    var rm2=anfxMat(0xb8b4ac,0.9);
-    for(i=0;i<28;i++){
-      var ra=i/28*6.283;
-      ANFX.items.push(anfxBox(grp,rm2,0.10,0.02,0.10,p.x+Math.cos(ra)*1.7,0.014,p.z+Math.sin(ra)*1.7));
+    /* 圈的半径 2.1 米，和判定一致（以前画 1.7 米、判定 3.3 米） */
+    var rm2=anfxMat(0xd8d4cc,0.95);
+    for(i=0;i<44;i++){
+      var ra=i/44*6.283;
+      var seg=anfxBox(grp,rm2,0.32,0.012,0.06,p.x+Math.cos(ra)*2.1,0.014,p.z+Math.sin(ra)*2.1);
+      seg.rotation.y=-ra+Math.PI/2;
+      ANFX.items.push(seg);
     }
+    for(i=0;i<5;i++){                                   /* 圈里的五角星 */
+      var a5=i/5*6.283-Math.PI/2, b5=((i+2)%5)/5*6.283-Math.PI/2;
+      var sx5=p.x+Math.cos(a5)*2.0, sz5=p.z+Math.sin(a5)*2.0, ex5=p.x+Math.cos(b5)*2.0, ez5=p.z+Math.sin(b5)*2.0;
+      var ln5=anfxBox(grp,rm2,Math.hypot(ex5-sx5,ez5-sz5),0.012,0.05,(sx5+ex5)/2,0.016,(sz5+ez5)/2);
+      ln5.rotation.y=-Math.atan2(ez5-sz5,ex5-sx5);
+    }
+    anfxBox(grp,anfxMat(0x1a1210,0.8),0.55,0.01,1.5,p.x,0.018,p.z);   /* 正中一块人形的暗渍 */
     var cm=anfxMat(0xe8dcc0,1.0);
     for(i=0;i<4;i++){
       var ca=i/4*6.283+0.6;
-      var cx4=p.x+Math.cos(ca)*1.35, cz4=p.z+Math.sin(ca)*1.35;
+      var cx4=p.x+Math.cos(ca)*1.6, cz4=p.z+Math.sin(ca)*1.6;
       anfxBox(grp,anfxMat(0xf0e8d8,1.0),0.08,0.22,0.08,cx4,0.11,cz4);
       var fl2=anfxBox(grp,cm,0.05,0.10,0.05,cx4,0.28,cz4);
       ANFX.items.push(fl2);
@@ -2661,6 +3110,16 @@ function anfxSpawn(kind,wx,wy){
     var fq=new THREE.Mesh(new THREE.PlaneGeometry(6,6),fm2);
     fq.rotation.x=-Math.PI/2; fq.position.set(p.x,0.05,p.z);
     grp.add(fq); ANFX.items.push(fq);
+  } else if(kind==='raindots'){
+    var tex=handTex('明天的天气：阴');
+    if(tex){
+      var rdm=new THREE.MeshBasicMaterial({map:tex,transparent:true,opacity:0.0,depthWrite:false,fog:true,color:0x9fb6c4});
+      var rd=new THREE.Mesh(new THREE.PlaneGeometry(4.2,0.95),rdm);
+      var ang0=S.ang;
+      rd.position.set(p.x+Math.cos(ang0)*3.2,0.02,p.z+Math.sin(ang0)*3.2);
+      rd.rotation.x=-Math.PI/2; rd.rotation.z=-ang0-Math.PI/2;
+      grp.add(rd); ANFX.items.push(rd);
+    }
   } else if(kind==='shadow'){
     var sm=anfxMat(0x05070a,0.72);
     var sq=new THREE.Mesh(new THREE.PlaneGeometry(0.9,1.6),sm);
@@ -2677,7 +3136,7 @@ function deathFX(type){
     var p=anfxW2S(S.x,S.y);
     var grp=new THREE.Group();
     ANFX.kind='death'; ANFX.grp=grp; ANFX.t=0; ANFX.deathType=type||'vignette';
-    ANFX.mx=undefined; ANFX.mz=undefined;
+    ANFX.mx=undefined; ANFX.mz=undefined; ANFX.flashed=0;
     var i, m;
     var dark=anfxMat(0x04060a,1.0);
     function push(o){ ANFX.items.push(o); return o; }
@@ -2917,8 +3376,14 @@ function deathFX(type){
     else if(T==='ring'){
       for(i=0;i<16;i++){
         var ra=i/16*6.283;
-        push(anfxBox(grp,anfxMat(0x9a968c,1.0),0.10,0.10,0.10,
-             p.x+Math.cos(ra)*2.2,0.02,p.z+Math.sin(ra)*2.2));
+        var rs=anfxBox(grp,anfxMat(0xd8d4cc,1.0),0.10,0.10,0.10,
+             p.x+Math.cos(ra)*2.2,0.02,p.z+Math.sin(ra)*2.2);
+        rs.userData={a:ra};
+        push(rs);
+      }
+      for(i=0;i<4;i++){                                    /* 四根蜡烛的火苗，一起朝你歪 */
+        var ca5=i/4*6.283+0.6;
+        anfxBox(grp,anfxMat(0xffc860,1.0),0.05,0.12,0.05,p.x+Math.cos(ca5)*1.6,0.30,p.z+Math.sin(ca5)*1.6).rotation.z=0.5;
       }
     }
     else if(T==='lamps'){
@@ -3042,7 +3507,12 @@ function anfxUpdate(dt){
   } else if(ANFX.kind==='death'){
     var dtp=ANFX.deathType||'vignette', kk=ANFX.t, it, ob;
     if(dtp==='floor'||dtp==='deep'){
-      for(it=0;it<ANFX.items.length;it++){ ob=ANFX.items[it]; if(ob.position.y<0.2) ob.position.y=-1.0+Math.min(3.4,kk*1.15); }
+      /* 镜头往下沉，黑水一样的地面往上漫，在 1.8 秒左右合上 */
+      for(it=0;it<ANFX.items.length;it++){
+        ob=ANFX.items[it];
+        if(ob.geometry&&ob.geometry.type==='PlaneGeometry') ob.position.y=Math.min(GLR.cam.position.y-0.08,-1.0+kk*0.95);
+        else ob.position.y=-1.2+Math.min(2.6,kk*1.1);
+      }
     } else if(dtp==='vignette'){
       var vr=Math.max(0.5,3.6-kk*1.5);
       for(it=0;it<ANFX.items.length;it++){
@@ -3052,23 +3522,18 @@ function anfxUpdate(dt){
         ob.position.z=ANFX.items[0].position.z+Math.sin(vu.a)*vr;
       }
     } else if(dtp==='lamps'){
-      var picks=(AN.data&&AN.data.lampPick)||0;
-      var fall=Math.min(1,kk*1.35);
+      /* 一圈灯依次亮起，然后一起压到头顶（以前这些灯永远不可见） */
+      var conv=Math.min(1,Math.max(0,(kk-1.4)/1.2));
+      var pc=anfxW2S(S.x,S.y);
       for(it=0;it<ANFX.items.length;it++){
         ob=ANFX.items[it]; var lu=ob.userData||{};
-        if(lu.d!==undefined){
-          ob.visible=true;
-          if(lu.d<1.2){                                  /* 头上这盏 */
-            ob.position.y=2.94-fall*1.75;
-            ob.scale.setScalar(1.4+fall*1.1);
-          }else{
-            ob.scale.setScalar(Math.max(0.001,1-fall*1.4));   /* 其它灯灭 */
-          }
-        }else if(lu.a===undefined&&ob.position.y<0.05){
-          ob.visible=true;
-          ob.scale.setScalar(1+fall*1.6);                /* 地上一圈光斑散开 */
-        }
+        if(lu.i===undefined) continue;
+        ob.visible=(kk*11>lu.i);
+        var la2=lu.i/16*6.283+conv*1.2, lr2=2.25-conv*1.9;
+        ob.position.set(pc.x+Math.cos(la2)*lr2, 2.55-conv*0.55, pc.z+Math.sin(la2)*lr2);
+        ob.scale.setScalar(1+conv*1.6);
       }
+      try{ GLR.flash=Math.max(GLR.flash||0,conv*0.9); }catch(e){}
     } else if(dtp==='laugh'){
       var pa2=anfxW2S(S.x,S.y);
       for(it=0;it<ANFX.items.length;it++){
@@ -3233,25 +3698,194 @@ function anfxUpdate(dt){
         }
       }
       try{ syncCamera(0); }catch(e){}
-    } else if(dtp==='ring'||dtp==='lamps'){
-      for(it=0;it<ANFX.items.length;it++){ ob=ANFX.items[it]; ob.position.y=1.2+Math.sin(kk*3+it)*0.12; }
+    } else if(dtp==='ring'){
+      /* 地上的石子一颗颗立起来，绕着你转，越收越紧，最后成了一个笼子 */
+      var pr=anfxW2S(S.x,S.y);
+      for(it=0;it<ANFX.items.length;it++){
+        ob=ANFX.items[it]; var ru=ob.userData||{};
+        if(ru.a===undefined) continue;
+        var ang2=ru.a+kk*(1.2+kk*0.4), rad2=Math.max(0.75,2.2-kk*0.55);
+        ob.position.set(pr.x+Math.cos(ang2)*rad2, Math.min(2.4,0.05+kk*0.7*(1+(it%4)*0.35)), pr.z+Math.sin(ang2)*rad2);
+        ob.scale.set(1,1+Math.min(12,kk*5),1);
+      }
+    } else if(dtp==='twin'||dtp==='shadow'){
+      /* 另一个你 / 你的影子：走过来，停在一臂远的地方；影子那种，镜头会被慢慢扭过去看它 */
+      var fig=ANFX.items[0];
+      if(fig&&fig.position){
+        var pt=anfxW2S(S.x,S.y);
+        var fdx=pt.x-fig.position.x, fdz=pt.z-fig.position.z, fdl=Math.hypot(fdx,fdz)||1;
+        var stp=Math.min(Math.max(0,fdl-0.85),dt*(1.2+kk*2.4));
+        fig.position.x+=fdx/fdl*stp; fig.position.z+=fdz/fdl*stp;
+        fig.rotation.y=Math.atan2(fdx,fdz);
+        if(dtp==='shadow'&&kk>0.6){
+          var want3=Math.atan2(fig.position.z-pt.z,fig.position.x-pt.x);
+          var d4=((want3-S.ang+PI*3)%TAU)-PI;
+          S.ang+=d4*Math.min(1,dt*1.6);
+          try{ syncCamera(0); }catch(e){}
+        }
+        if(fdl<1.0&&!ANFX.flashed){ ANFX.flashed=1; GLR.flash=Math.max(GLR.flash||0,0.45); }
+      }
+    } else if(dtp==='follow'){
+      /* 做操的人围上来；你的视线跟着节拍一上一下 */
+      var pf=anfxW2S(S.x,S.y), rr4=Math.max(1.1,3.2-kk*1.0);
+      for(it=0;it<ANFX.items.length;it++){
+        ob=ANFX.items[it]; var fu2=ob.userData||{};
+        if(fu2.ring===undefined) continue;
+        var a6=fu2.ring+kk*0.25;
+        ob.position.set(pf.x+Math.cos(a6)*rr4,0,pf.z+Math.sin(a6)*rr4);
+        ob.rotation.y=Math.atan2(pf.x-ob.position.x,pf.z-ob.position.z);
+        ob.rotation.x=Math.sin(kk*4.4)*0.35;
+      }
+      if(kk>1.0){ S.pitch=Math.sin(kk*4.4)*0.32; try{ syncCamera(0); }catch(e){} }
     } else {
+      /* 其它：一个黑影从前方走到你面前（以前这里的 z 坐标算成了两倍） */
       if(ANFX.grp&&ANFX.grp.position){
         var pq=anfxW2S(S.x,S.y);
         var dx=pq.x-ANFX.grp.position.x, dz=pq.z-ANFX.grp.position.z;
-        var dl=Math.sqrt(dx*dx+dz*dz)||1, sp=Math.min(dl-1.2,kk*2.2);
-        ANFX.grp.position.x=pq.x-dx/dl*(dl-sp);
-        ANFX.grp.position.z=pq.z-dl/dl*0+ (pq.z-dz/dl*(dl-sp));
+        var dl=Math.sqrt(dx*dx+dz*dz)||1, sp=Math.min(Math.max(0,dl-1.0),dt*(2+kk*3));
+        ANFX.grp.position.x+=dx/dl*sp;
+        ANFX.grp.position.z+=dz/dl*sp;
+        ANFX.grp.rotation.y=Math.atan2(dx,dz);
       }
     }
   } else if(ANFX.kind==='shadow'){
     var ps=anfxW2S(S.x,S.y);
     ANFX.grp.position.set(ps.x+0.35,0,ps.z+0.5);
   } else if(ANFX.kind==='twin'){
-    if(ANFX.grp.children[0]){
-      ANFX.grp.children[0].rotation.y=Math.sin(ANFX.t*0.7)*0.4;
+    var tw0=ANFX.grp.children[0];
+    if(tw0&&AN.data&&AN.data.x!==undefined){
+      var tp=anfxW2S(AN.data.x,AN.data.y);
+      tw0.position.set(tp.x,0,tp.z);
+      tw0.rotation.y=Math.atan2(GLR.cam.position.x-tp.x,GLR.cam.position.z-tp.z);
+    }
+  } else if(ANFX.kind==='necker'){
+    var nf=ANFX.items[0];
+    if(nf){
+      var np=anfxW2S(BOUND.x1*SC+16,S.y);
+      nf.position.z+=(np.z-nf.position.z)*Math.min(1,dt*0.9);       /* 他跟着你走，慢半步 */
+      nf.position.x=np.x;
+      nf.rotation.y=Math.atan2(GLR.cam.position.x-nf.position.x,GLR.cam.position.z-nf.position.z);
+      nf.rotation.z=Math.sin(ANFX.t*1.3)*0.05;
+    }
+  } else if(ANFX.kind==='raindots'){
+    for(i=0;i<ANFX.items.length;i++){ m=ANFX.items[i]; if(m.material) m.material.opacity=Math.min(0.85,ANFX.t*0.12); }
+  } else if(ANFX.kind==='rite'){
+    for(i=0;i<ANFX.items.length;i++){ m=ANFX.items[i]; if(m.geometry&&m.geometry.parameters&&m.geometry.parameters.height===0.10) m.scale.y=0.8+0.4*Math.abs(Math.sin(ANFX.t*7+i)); }
+  }
+}
+/* ---------- 异常的痕迹 ----------
+   异象过去以后，地上会留下点东西：积水、粉笔圈的残迹、死掉的飞蛾、一行行脚印……
+   记在存档里（RT.traces），回到那个地方还能看见。另外有几处从一开始就在的痕迹。 */
+var TR={g:null,key:''};
+var TRACE_STATIC=[
+  {k:'scratch', room:'teach1', c:56.98,r:17.2},     /* 厕所门口墙上一道道指甲印 */
+  {k:'drag',    room:'garage1',c:40,   r:13.5},     /* 车库：拖过去的两道鞋印 */
+  {k:'wetfeet', room:'dorm1',  c:38,   r:7.5},      /* 宿舍楼梯口：湿脚印，只有来的方向 */
+  {k:'outline', room:'teach6', c:20,   r:6},        /* 天台：粉笔画的人形 */
+  {k:'shoe',    room:null,     x:288,  y:428},      /* 操场边：一只白球鞋 */
+  {k:'hands',   room:'lab1',   c:24,   r:16.01}      /* 实验楼一楼：玻璃上的手印，从外面按的 */
+];
+function traceAdd(id){
+  if(!id) return;
+  var d=AN.data||{}, t=null, room=(S.mode==='in')?S.room:null;
+  if(id==='rain'||id==='raindots') t={k:'puddle',x:S.x,y:S.y};
+  else if(id==='leak'&&d.pts) t={k:'stain',pts:d.pts.slice(0,5)};
+  else if(id==='rite'&&d.c) t={k:'chalkring',x:d.c.x,y:d.c.y};
+  else if(id==='moth'&&d.src) t={k:'moths',x:d.src.x,y:d.src.y};
+  else if(id==='exercise'&&d.src) t={k:'rows',x:d.src.x,y:d.src.y};
+  else if(id==='twin'&&d.x!==undefined) t={k:'feet',x:d.x,y:d.y,a:Math.atan2(S.y-d.y,S.x-d.x)};
+  else if(id==='roster'&&d.rx!==undefined) t={k:'paper',x:d.rx,y:d.ry};
+  else if(id==='hand') t={k:'handprint',x:S.x,y:S.y};
+  else if(id==='necker') t={k:'fence',x:BOUND.x1*SC-6,y:S.y};
+  else if(id==='feast') t={k:'bowl',x:S.x,y:S.y};
+  else if(id==='chalk') t={k:'dust',x:S.x,y:S.y};
+  if(!t) return;
+  t.room=room;
+  RT.traces=RT.traces||[];
+  RT.traces.push(t);
+  while(RT.traces.length>40) RT.traces.shift();
+  tracesBuild(true);
+}
+function tracesBuild(force){
+  var key=(S.mode==='in'?S.room:'out')+'|'+((RT.traces&&RT.traces.length)||0);
+  if(!force&&TR.key===key&&TR.g&&TR.g.parent) return;
+  if(TR.g){ try{ GLR.scene.remove(TR.g); }catch(e){} }
+  TR.key=key;
+  var g=new THREE.Group(); TR.g=g;
+  var room=(S.mode==='in')?S.room:null, R=room?INTERIORS[room]:null;
+  function W(x,y){ return worldToScene(x,y,R); }
+  function C(c,r){ return R?W(R.ox+c*R.tw,R.oy+r*R.th):{x:0,z:0}; }
+  var mDark=anfxMat(0x101418,0.55), mWet=anfxMat(0x18242a,0.62), mChalk=anfxMat(0xd8d4cc,0.35),
+      mPale=anfxMat(0xb8b2a0,0.85), mRed=anfxMat(0x3a1210,0.7);
+  function flat(m,w,d,x,z,rot,y){ var o=anfxBox(g,m,w,0.004,d,x,y||0.016,z); if(rot) o.rotation.y=rot; return o; }
+  function footprints(x,z,a,n,gap){
+    for(var i=0;i<n;i++){
+      var fx=x+Math.cos(a)*i*gap, fz=z+Math.sin(a)*i*gap, side=(i%2?1:-1)*0.12;
+      flat(mDark,0.11,0.26,fx-Math.sin(a)*side,fz+Math.cos(a)*side,-a+Math.PI/2);
     }
   }
+  var list=TRACE_STATIC.concat(RT.traces||[]), i, j, t;
+  for(i=0;i<list.length;i++){
+    t=list[i];
+    if((t.room||null)!==room) continue;
+    var p=(t.c!==undefined)?C(t.c,t.r):(t.x!==undefined?W(t.x,t.y):null);
+    if(t.k==='puddle'){ for(j=0;j<6;j++){ var pp=new THREE.Mesh(new THREE.CircleGeometry(0.5+hash2(j,i)*0.9,10),mWet); pp.rotation.x=-Math.PI/2; pp.position.set(p.x+(hash2(i,j)-0.5)*7,0.018,p.z+(hash2(j+3,i)-0.5)*7); g.add(pp); } }
+    else if(t.k==='stain'){ for(j=0;j<t.pts.length;j++){ var sp=W(t.pts[j].x,t.pts[j].y); var c1=new THREE.Mesh(new THREE.CircleGeometry(0.7,10),mWet); c1.rotation.x=-Math.PI/2; c1.position.set(sp.x,0.018,sp.z); g.add(c1); anfxBox(g,anfxMat(0x2a2420,0.6),0.9,0.01,0.7,sp.x,2.985,sp.z); } }
+    else if(t.k==='chalkring'){ for(j=0;j<30;j++){ if(hash2(i,j)<0.3) continue; var ra=j/30*6.283; var sg=flat(mChalk,0.28,0.05,p.x+Math.cos(ra)*2.1,p.z+Math.sin(ra)*2.1,-ra+Math.PI/2); } for(j=0;j<4;j++){ var ca=j/4*6.283+0.6; anfxBox(g,mPale,0.12,0.03,0.12,p.x+Math.cos(ca)*1.6,0.03,p.z+Math.sin(ca)*1.6); } }
+    else if(t.k==='moths'){ for(j=0;j<40;j++) flat(mPale,0.05,0.03,p.x+(hash2(i,j)-0.5)*5,p.z+(hash2(j,i+7)-0.5)*5,hash2(j,3)*6); }
+    else if(t.k==='rows'){ for(j=0;j<6;j++) footprints(p.x-5+j*2.0,p.z-2,Math.PI/2,7,0.62); }
+    else if(t.k==='feet'){ footprints(p.x,p.z,t.a||0,9,0.6); }
+    else if(t.k==='paper'){ for(j=0;j<7;j++) flat(mPale,0.18,0.12,p.x+(hash2(i,j)-0.5)*1.6,p.z+(hash2(j,i)-0.5)*1.6,hash2(j,i+1)*6); flat(mRed,0.16,0.012,p.x,p.z,0.4,0.02); }
+    else if(t.k==='handprint'){ for(j=0;j<3;j++) flat(mWet,0.14,0.18,p.x+j*0.35,p.z+(j%2)*0.2,0.3*j); }
+    else if(t.k==='fence'){ for(j=0;j<6;j++) anfxBox(g,mDark,0.02,0.18,0.14,p.x+0.02,0.6+hash2(i,j)*0.7,p.z-1.5+j*0.6); }
+    else if(t.k==='bowl'){ anfxBox(g,anfxMat(0xe8e2d4,1.0),0.16,0.08,0.16,p.x+0.6,0.04,p.z); anfxBox(g,anfxMat(0x3a2a1a,1.0),0.012,0.2,0.012,p.x+0.6,0.14,p.z); }
+    else if(t.k==='dust'){ for(j=0;j<14;j++) flat(mChalk,0.08,0.08,p.x+(hash2(i,j)-0.5)*1.4,p.z+(hash2(j,i)-0.5)*1.4,0); }
+    else if(t.k==='scratch'){ for(j=0;j<5;j++) anfxBox(g,anfxMat(0x3a302c,0.85),0.012,0.9-j*0.08,0.02,p.x,1.1+j*0.03,p.z+j*0.07); }
+    else if(t.k==='drag'){ for(j=0;j<26;j++){ flat(mDark,0.12,0.42,p.x+j*0.55,p.z-0.2,Math.PI/2); flat(mDark,0.12,0.42,p.x+j*0.55,p.z+0.2,Math.PI/2); } }
+    else if(t.k==='wetfeet'){ footprints(p.x,p.z,Math.PI,10,0.58); }
+    else if(t.k==='outline'){
+      var seg=[[0,0.95,0.5,0],[0,0.1,0.06,0.5],[-0.22,-0.4,0.06,0.9],[0.22,-0.4,0.06,0.9],[-0.42,0.45,0.06,0.7],[0.42,0.45,0.06,0.7]];
+      for(j=0;j<seg.length;j++) flat(mChalk,seg[j][2]||0.06,seg[j][3]||0.06,p.x+seg[j][0],p.z+seg[j][1],0);
+      var hd=new THREE.Mesh(new THREE.RingGeometry(0.16,0.2,14),mChalk); hd.rotation.x=-Math.PI/2; hd.position.set(p.x,0.017,p.z+1.25); g.add(hd);
+    }
+    else if(t.k==='shoe'){ anfxBox(g,anfxMat(0xe8e8e2,1.0),0.11,0.09,0.27,p.x,0.045,p.z).rotation.y=0.7; anfxBox(g,anfxMat(0x6a1a14,1.0),0.11,0.01,0.27,p.x,0.093,p.z).rotation.y=0.7; }
+    else if(t.k==='hands'){ for(j=0;j<4;j++) anfxBox(g,anfxMat(0x8a9aa0,0.5),0.14,0.18,0.01,p.x-0.6+j*0.38,1.2+(j%2)*0.3,p.z); }
+  }
+  GLR.scene.add(g);
+}
+/* 低 SAN 的幻觉：视野边上站着一个人，你一转过去看，他就不在了 */
+var HALLU={g:null,t:0,next:12,life:0};
+function hallucTick(dt){
+  var on=(S.screen==='play'&&!S.dead&&!PAUSE.on&&S.san<32&&!AN.active&&!UI.anyOpen());
+  if(!HALLU.g){
+    HALLU.g=new THREE.Group();
+    anfxFigure(HALLU.g,new THREE.MeshBasicMaterial({color:0x040506,fog:true}),0,0,1.05,false);
+    HALLU.g.visible=false; GLR.scene.add(HALLU.g);
+  }
+  if(HALLU.g.parent!==GLR.scene) GLR.scene.add(HALLU.g);
+  if(!on){ HALLU.g.visible=false; return; }
+  if(HALLU.g.visible){
+    HALLU.life-=dt;
+    var hp=HALLU.g.position, cp=GLR.cam.position;
+    var aTo=Math.atan2(hp.z-cp.z,hp.x-cp.x);
+    if(angDiff(aTo,S.ang)<0.22||HALLU.life<=0){ HALLU.g.visible=false; HALLU.next=rnd(10,26)*(0.5+S.san/64); }
+    return;
+  }
+  HALLU.next-=dt;
+  if(HALLU.next>0) return;
+  /* 放在视野边缘 50°～65°、8–14 米外，站得住的地方 */
+  var side=Math.random()<0.5?-1:1, k;
+  for(k=0;k<6;k++){
+    var a=S.ang+side*rnd(0.85,1.15), dist=rnd(70,125);
+    var wx=S.x+Math.cos(a)*dist, wy=S.y+Math.sin(a)*dist;
+    if(solidAt(wx,wy)) continue;
+    var p=anfxW2S(wx,wy);
+    HALLU.g.position.set(p.x,0,p.z);
+    HALLU.g.rotation.y=Math.atan2(GLR.cam.position.x-p.x,GLR.cam.position.z-p.z);
+    HALLU.g.visible=true; HALLU.life=rnd(2.5,5);
+    break;
+  }
+  HALLU.next=4;
 }
 var ANW={on:false,grp:null,room:null,t:0,segs:[],key:''};
 var SEG_MAP={
@@ -3314,7 +3948,7 @@ function anwSpawn(){
   var grp=new THREE.Group();
   ANW.grp=grp; ANW.on=true; ANW.t=0; ANW.segs=[]; ANW.room=S.room;
   var mk=anfxMat(0xe9eee6,0.94);          /* 粉笔白 */
-  var txt=fmtClock(Math.round(S.tsec+AN.next));   /* 预告的是"钟点" */
+  var txt=fmtClock(Math.round(S.tsec+AN.next*rateAt(S.tsec)/60));   /* 预告的是"钟点"（AN.next 是真实秒数） */
   ANW.text=txt;
   var plane, i, w=0.20, h=0.30, gap=0.06;
   var total=0;
@@ -3359,9 +3993,9 @@ function anwSpawn(){
   }
 }
 function anwTick(dt){
-  var show=(S.screen==='play'&&!S.dead&&!PAUSE.on&&!AN.active&&AN.next>0&&AN.next<=5&&!UI.anyOpen());
+  var show=(S.screen==='play'&&!S.dead&&!PAUSE.on&&!AN.active&&AN.next>0&&AN.next<=8&&!UI.anyOpen());
   if(!show){ if(ANW.on) anwClear(); return; }
-  var key=Math.round(S.tsec+AN.next)+'|'+(S.room||'out');
+  var key=Math.round(S.tsec+AN.next*rateAt(S.tsec)/60)+'|'+(S.room||'out');
   if(!ANW.on||ANW.key!==key||ANW.room!==S.room){ anwClear(); ANW.key=key; anwSpawn(); }
   ANW.t+=dt;
   for(var i=0;i<ANW.segs.length;i++){
@@ -3472,11 +4106,19 @@ function ncUpdate(dt){
   }
   if(v<80) NC.doorP=null;
   NC.blocking=(v>=92&&!!NC.doorP);
+  var staring=(AN.active&&AN.id==='stare');
   for(i=0;i<NC.list.length;i++){
     f=NC.list[i];
     var ud=f.userData||{};
+    if(staring&&v<70){                                   /* 全体回头：一起转过来，快 */
+      var wantS=Math.atan2(f.position.x-p.x,f.position.z-p.z);   /* 模型的脸朝 -z */
+      var curS=f.rotation.y||0;
+      var dS=((wantS-curS+Math.PI*3)%(Math.PI*2))-Math.PI;
+      f.rotation.y=curS+dS*Math.min(1,dt*6);
+      continue;
+    }
     if(v>=35&&v<70){
-      var want=Math.atan2(p.z-ud.hz,p.x-ud.hx);
+      var want=Math.atan2(ud.hx-p.x,ud.hz-p.z);
       var cur=f.rotation.y||0;
       var d=((want-cur+Math.PI*3)%(Math.PI*2))-Math.PI;
       f.rotation.y=cur+d*Math.min(1,dt*2.2);
@@ -3501,7 +4143,7 @@ function ncUpdate(dt){
       var sp=Math.min(dl,dt*(v>=92?1.9:1.2));
       f.position.x+=dx/dl*sp; f.position.z+=dz/dl*sp;
     }
-    var wy2=Math.atan2(p.z-f.position.z,p.x-f.position.x);
+    var wy2=Math.atan2(f.position.x-p.x,f.position.z-p.z);
     var d3=((wy2-(f.rotation.y||0)+Math.PI*3)%(Math.PI*2))-Math.PI;
     f.rotation.y=(f.rotation.y||0)+d3*Math.min(1,dt*2.5);
   }
@@ -3624,7 +4266,7 @@ function addRoomLights(R){
     pl.position.set(x,y,z);
     GLR.scene.add(pl);
     GLR.roomLights.push(pl);
-    GLR.roomLightBase.push(LCFG.ptI);
+    GLR.roomLightBase.push(inten);
   }
   if(R.host==='teach'&&R.floor>=1&&R.floor<=5){
     var spans2=[[5,11],[21,27],[45,51]];
@@ -3636,13 +4278,15 @@ function addRoomLights(R){
     return;
   }
   if(R.id==='lab3'){
-    addLight(-W*0.22, 2.70, -H*0.22, 0x8a2418, LCFG.ptI*1.5, 22, 2.0);
-    addLight( W*0.24, 2.70, -H*0.22, 0x7a1e14, LCFG.ptI*1.5, 22, 2.0);
-    addLight(-W*0.22, 2.60,  H*0.10, 0x6a1a12, LCFG.ptI*1.1, 18, 2.0);
-    addLight( W*0.24, 2.60,  H*0.10, 0x8a2a1c, LCFG.ptI*1.1, 18, 2.0);
+    /* 学生机房是冷白的日光灯；隔壁上锁的网络中心只有机柜的红光 */
+    addLight(-16, 2.70, -2.0, 0xc8dce8, LCFG.ptI*1.3, 18, 2.0);
+    addLight( -3, 2.70, -2.0, 0xc8dce8, LCFG.ptI*1.1, 18, 2.0);
+    addLight( 17, 2.60, -2.5, 0x8a2418, LCFG.ptI*1.6, 16, 2.0);
     addLight(0, 2.60, H*0.40, 0xc07a4a, LCFG.ptI*0.8, 14, 2.0);
     return;
   }
+  if(R.host==='bell'){ addLight(0,2.4,0.5,0xffa860,LCFG.ptI*0.9,12,2.0); return; }   /* 只有蜡烛 */
+  if(R.host==='trash'){ addLight(0,2.6,0,0xb8d0a8,LCFG.ptI*0.7,10,2.0); return; }
   var n=2;
   for(i=0;i<n;i++){
     var lx=(i/(n-1||1)-0.5)*W*0.66;
@@ -3662,46 +4306,55 @@ function enterWorldRoom(roomId){
   var dens=roomId==='garage1'?0.082:0.050;
   GLR.scene.fog=new THREE.FogExp2(FOG_COL,dens);
   addRoomLights(R);
+  try{ tracesBuild(); }catch(e){}
   try{ ncBuild(R); }catch(e){}
   try{ skipClear(); }catch(e){}
 }
+/* ---------- 天光：一条太阳曲线管所有东西 ----------
+   以前天空、环境光、雾各有各的时间表：天空 19:48 就黑透了，环境光要到 20:50 才暗，
+   雾却一直是近黑色 —— 白天远处的楼全成了黑剪影。现在全部从 sunAt() 取值，
+   日出 6:00，日落 18:36，前后各有一段霞光。 */
+var SUN_RISE=6.0, SUN_SET=18.6;
+function hourNow(){ return (((S.tsec%1440)+1440)%1440)/60; }
+function smooth01(a,b,x){ var t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); }
+function sunAt(h){
+  var span=SUN_SET-SUN_RISE;
+  var e=Math.sin(PI*(h-SUN_RISE)/span);            /* 太阳高度：白天 0..1，夜里为负 */
+  var day=smooth01(-0.10,0.32,e);                  /* 0 = 夜，1 = 白天 */
+  var gold=smooth01(-0.24,0.0,e)*(1-smooth01(0.06,0.42,e));   /* 地平线附近的霞光 */
+  var t=clamp((h-SUN_RISE)/span,0,1), az=PI*t;
+  return { e:e, day:day, gold:gold, night:1-day,
+    dir:[Math.cos(az), 0.10+Math.max(0,e)*1.2, 0.55*Math.sin(az)] };   /* 东升（+x）→ 南 → 西落 */
+}
 function skyBucket(){
-  var h=((S.tsec%1440)+1440)%1440/60;
-  if(h>=6.2&&h<17.6) return 'day';
-  if(h>=17.6&&h<19.4) return 'dusk';
+  var s=sunAt(hourNow());
+  if(s.day>0.7) return 'day';
+  if(s.day>0.08) return 'dusk';
   return 'night';
 }
-var SKY_KEYS=[
-  {h:0.0,  c:['#030507','#070b0e','#0c1216','#111a1f']},   /* 夜 */
-  {h:5.4,  c:['#030507','#070b0e','#0c1216','#111a1f']},
-  {h:6.4,  c:['#141a20','#222a31','#2e363d','#3a4147']},   /* 黄昏/黎明 */
-  {h:7.6,  c:['#3f6f9c','#5d8dbb','#8fb2cf','#c2d3dd']},   /* 白天：晴天 */
-  {h:17.2, c:['#4a78a4','#6d97c1','#9fbbd4','#cfd9df']},
-  {h:18.6, c:['#141a20','#222a31','#2e363d','#3a4147']},
-  {h:19.8, c:['#030507','#070b0e','#0c1216','#111a1f']},
-  {h:24.0, c:['#030507','#070b0e','#0c1216','#111a1f']}
-];
+var SKY_NIGHT=['#03060a','#070c11','#0c141a','#111b22'];
+var SKY_DAY  =['#3a6c9e','#5d8ebd','#92b4d1','#c4d5df'];
+var SKY_GOLD =['#262f48','#5d5168','#b8735a','#e09a6c'];
 function hex2rgb(h){
   return [parseInt(h.substr(1,2),16),parseInt(h.substr(3,2),16),parseInt(h.substr(5,2),16)];
 }
-function skyColorsAt(hour){
-  var i,k, a,b, f;
-  for(i=0;i<SKY_KEYS.length-1;i++){
-    if(hour>=SKY_KEYS[i].h&&hour<=SKY_KEYS[i+1].h){ k=i; break; }
-  }
-  if(k===undefined) k=SKY_KEYS.length-2;
-  a=SKY_KEYS[k]; b=SKY_KEYS[k+1];
-  f=(b.h===a.h)?0:(hour-a.h)/(b.h-a.h);
-  f=Math.max(0,Math.min(1,f));
-  f=f*f*(3-2*f);                                   /* 平滑一点 */
-  var out=[];
-  for(var j=0;j<4;j++){
-    var ca=hex2rgb(a.c[j]), cb=hex2rgb(b.c[j]);
-    out.push('rgb('+Math.round(ca[0]+(cb[0]-ca[0])*f)+','
-                    +Math.round(ca[1]+(cb[1]-ca[1])*f)+','
-                    +Math.round(ca[2]+(cb[2]-ca[2])*f)+')');
+var SKY_STORM=['#2a3036','#353d43','#444c52','#4e575d'];
+function skyRGB(hour){
+  var s=sunAt(hour), out=[], j, k, oc=(typeof GLR!=='undefined'&&GLR.overcast)||0;
+  for(j=0;j<4;j++){
+    var n=hex2rgb(SKY_NIGHT[j]), d=hex2rgb(SKY_DAY[j]), g=hex2rgb(SKY_GOLD[j]), st=hex2rgb(SKY_STORM[j]), c=[];
+    for(k=0;k<3;k++){
+      var v=n[k]+(d[k]-n[k])*s.day;
+      v=v+(g[k]-v)*s.gold*0.85;
+      v=v+(st[k]*(0.30+0.70*s.day)-v)*oc*0.9;          /* 下雨：压成铅灰 */
+      c.push(Math.round(v));
+    }
+    out.push(c);
   }
   return out;
+}
+function skyColorsAt(hour){
+  return skyRGB(hour).map(function(c){ return 'rgb('+c[0]+','+c[1]+','+c[2]+')'; });
 }
 function makeSky(arg){
   try{
@@ -3709,11 +4362,8 @@ function makeSky(arg){
     cv.width=2; cv.height=256;
     var c=cv.getContext('2d');
     if(!c) return null;
-    var cols;
-    if(typeof arg==='number') cols=skyColorsAt(arg);
-    else if(arg==='dusk') cols=['#141a20','#222a31','#2e363d','#3a4147'];
-    else if(arg==='night') cols=['#030507','#070b0e','#0c1216','#111a1f'];
-    else cols=['#333b42','#414a51','#4b545a','#555e63'];
+    var h=(typeof arg==='number')?arg:(arg==='night'?0:(arg==='dusk'?18.7:12));
+    var cols=skyColorsAt(h);
     var gr=c.createLinearGradient(0,0,0,256);
     gr.addColorStop(0.00,cols[0]);
     gr.addColorStop(0.62,cols[1]);
@@ -3726,13 +4376,12 @@ function makeSky(arg){
   }catch(e){ return null; }
 }
 function refreshSky(){
-  var h=((S.tsec%1440)+1440)%1440/60;
-  var q=Math.round(h*20)/20;                     /* 每 3 分钟一档，够连续了 */
-  if(GLR.skyHour===q) return;
+  var q=Math.round(hourNow()*20)/20+Math.round((GLR.overcast||0)*10)*100;   /* 每 3 分钟一档；阴云另算 */
+  if(GLR.skyHour===q&&GLR.skyTex) return;
   GLR.skyHour=q;
   GLR.skyBucket=skyBucket();
   if(GLR.skyTex&&GLR.skyTex.dispose) GLR.skyTex.dispose();
-  GLR.skyTex=makeSky(q);
+  GLR.skyTex=makeSky(hourNow());
   if(GLR.skyTex) GLR.scene.background=GLR.skyTex;
 }
 function enterWorldOut(){
@@ -3742,22 +4391,10 @@ function enterWorldOut(){
   GLR.outMesh.userData=GLR.outMesh.userData||{};
   GLR.outMesh.userData.__outworld=1;
   GLR.scene.add(GLR.outMesh);
-  GLR.scene.fog=new THREE.FogExp2(FOG_COL,0.040);
-  GLR.skyBucket=skyBucket(); GLR.skyTex=makeSky(GLR.skyBucket);
-  if(GLR.skyTex) GLR.scene.background=GLR.skyTex;
-  var i, made=0;
-  for(i=0;i<OBJ.length;i++){
-    var o=OBJ[i];
-    if(o.k!=='roof'&&o.k!=='link') continue;
-    if(made>=9) break;
-    var ow=objWorld(o);
-    var pl=new THREE.PointLight(0xa8c0d0, LCFG.outPtI, LCFG.outPtDist, 1.8);
-    pl.position.set((ow.x+ow.w/2)*U2M,6.5,(ow.y+ow.h)*U2M*1.0);
-    GLR.scene.add(pl);
-    GLR.roomLights.push(pl);
-    GLR.roomLightBase.push(LCFG.outPtI);
-    made++;
-  }
+  GLR.scene.fog=new THREE.FogExp2(FOG_COL,0.020);
+  GLR.skyHour=-1; refreshSky();
+  GLR.lampPick=0;
+  try{ tracesBuild(); }catch(e){}
 }
 
 function worldToScene(wx,wy,roomR){
@@ -3768,65 +4405,127 @@ function worldToScene(wx,wy,roomR){
   return { x:wx*U2M, z:wy*U2M };
 }
 
-function dayLight(){
-  var t=S.tsec;
-  if(t<400) return 0.05;
-  if(t<480) return lerp(0.05,1.0,(t-400)/80);
-  if(t<1000) return 1.0;
-  if(t<1250) return lerp(1.0,0.05,(t-1000)/250);
-  if(t<1300) return lerp(0.05,0.05,0);
-  return 0.05;
-}
+function dayLight(){ return sunAt(hourNow()).day; }
 var LCFG={
-  ambCol:[0x7a/255,0x77/255,0x72/255],
-  hemiSky:[0xa8/255,0xad/255,0xae/255],
-  hemiGnd:[0x3a/255,0x36/255,0x2f/255],
-  moonCol:[0xc8/255,0xda/255,0xe6/255],
-  moonDir:[-0.42,0.80,0.43],
-  ptCol:[0xcf/255,0xe0/255,0xea/255],
   ptI:26, ptDist:14, ptDecay:2.0,
-  outPtI:44, outPtDist:26,
+  lampI:20, lampDist:15,
   camI:1.6, camIk:1.4, camDist:12, camDecay:1.5
 };
+var MOON_DIR=[-0.42,0.80,0.43];
+var _lc1=null,_lc2=null;
+function mixRGB(a,b,t){ return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]; }
 function lightState(){
-  var L=dayLight();
+  var sun=sunAt(hourNow());
   var indoor=(S.mode==='in');
-  var k=L*(indoor?0.62:1.75);          /* 室外视野开阔，给更强的天光 */
-  if(indoor&&S.room==='garage1') k=0.10;
+  var roof=indoor&&S.room==='teach6';
+  if(roof) indoor=false;                     /* 天台上头顶就是天 */
+  var day=sun.day;
   var wn=(typeof GLR!=='undefined'&&GLR.worldNorm)?GLR.worldNorm:0;
-  if(wn>0) k=k*(1+0.55*wn)+0.16*wn;
-  var fnl=(typeof S!=='undefined'&&S.fn&&S.fn.on&&S.fn.v<72)?1:0;
-  if(fnl&&k<0.9) k=0.9;
-  if(typeof GLR!=='undefined'&&GLR.moon&&GLR.moon.color){
-    var warm=Math.min(1,Math.max(0,k-0.5)*1.6);
-    GLR.moon.color.setRGB(0.78+0.22*warm,0.85+0.13*warm,0.90-0.10*warm);
+  if(wn>0) day=day+(1-day)*0.6*wn;           /* "正常世界"那一段总是亮一点 */
+  var fnl=(S.fn&&S.fn.on&&S.fn.v<72)?1:0;
+  if(fnl) day=Math.max(day,0.85);
+  var st={ day:day, gold:sun.gold, sun:sun, indoor:indoor };
+  if(indoor){
+    var g=(S.room==='garage1');
+    st.amb = g?0.06:(0.15+0.22*day);
+    st.hemi= g?0.04:(0.08+0.17*day);
+    st.dir = g?0.03:(0.05+0.28*day);
+    st.ptK = g?1:(0.42+0.58*day);            /* 夜里的灯还亮着，只是暗、会闪 */
+  }else{
+    st.amb = 0.07+0.24*day;
+    st.hemi= 0.10+0.42*day;
+    st.dir = day>0.02 ? (0.16+0.86*day*(1-0.30*sun.gold)) : 0.15;
+    st.ptK = 1;
   }
-  return {
-    k:k, L:L, indoor:indoor,
-    amb:  0.19 + 0.36*k,
-    hemi: 0.13 + 0.22*k,
-    moon: 0.09 + 0.38*k,
-    pt:   LCFG.ptI*(0.06+0.42*k)
-  };
+  return st;
 }
 function updateLighting(){
+  var ocT=(typeof AN!=='undefined'&&AN.active&&(AN.id==='rain'||AN.id==='raindots'))?1:0;
+  GLR.overcast=(GLR.overcast||0)+(ocT-(GLR.overcast||0))*Math.min(1,(dtG||0.016)*0.6);
   try{ refreshSky(); }catch(e){}
   if(!GLR.amb) return;
-  var s=lightState(), i;
-  GLR.amb.intensity=s.amb;
-  GLR.hemi.intensity=s.hemi;
-  GLR.moon.intensity=s.moon;
+  var s=lightState(), i, sun=s.sun, oc=GLR.overcast;
+  GLR.amb.intensity=s.amb*(1-0.25*oc);
+  GLR.hemi.intensity=s.hemi*(1-0.30*oc);
+  GLR.moon.intensity=s.dir*(1-0.70*oc);
+  /* 颜色：白天偏暖白，霞光橙，夜里月光偏蓝 */
+  var sunCol=mixRGB([1.0,0.95,0.86],[1.0,0.62,0.38],sun.gold);
+  var dc=mixRGB([0.55,0.66,0.86],sunCol,smooth01(0.0,0.35,s.day));
+  GLR.moon.color.setRGB(dc[0],dc[1],dc[2]);
+  var hs=mixRGB([0.16,0.21,0.30],[0.77,0.85,0.93],s.day), hg=mixRGB([0.05,0.05,0.06],[0.43,0.40,0.32],s.day);
+  hs=mixRGB(hs,[0.86,0.62,0.50],sun.gold*0.5);
+  GLR.hemi.color.setRGB(hs[0],hs[1],hs[2]); GLR.hemi.groundColor.setRGB(hg[0],hg[1],hg[2]);
+  var ac=mixRGB([0.36,0.40,0.50],[0.50,0.49,0.47],s.day);
+  GLR.amb.color.setRGB(ac[0],ac[1],ac[2]);
+  if(s.day>0.02&&!s.indoor){
+    GLR.moon.position.set(sun.dir[0]*16, sun.dir[1]*16, sun.dir[2]*16);
+  }else{
+    GLR.moon.position.set(MOON_DIR[0]*16, MOON_DIR[1]*16, MOON_DIR[2]*16);
+  }
+  /* 雾：室外跟着地平线的天色走，白天薄、夜里厚；室内是屋里那种暗 */
+  var fog=GLR.scene.fog;
+  if(fog){
+    if(!s.indoor){
+      var hz=skyRGB(hourNow())[3];
+      var fk=0.86;
+      var fr=hz[0]/255*fk, fgc=hz[1]/255*fk, fb=hz[2]/255*fk;
+      var dens=0.030+(0.0068-0.030)*s.day;
+      if(AN&&AN.active&&AN.id==='rain'){ dens+=0.030; fr=fr*0.6+0.09; fgc=fgc*0.6+0.10; fb=fb*0.6+0.12; }
+      if(S.mode==='in') dens*=1.4;            /* 天台：雾近一点，楼底下看不清 */
+      fog.color.setRGB(fr,fgc,fb,THREE.SRGBColorSpace);
+      fog.density=dens;
+    }else{
+      fog.color.setHex(FOG_COL);
+      fog.density=(S.room==='garage1')?0.082:0.050;
+    }
+  }
   var tt=GLR.time||0;
   for(i=0;i<GLR.roomLights.length;i++){
-    var isnOut=GLR.roomLightBase[i]===LCFG.outPtI;
-    var base=(isnOut?LCFG.outPtI:LCFG.ptI)*(0.10+0.95*s.k);
+    var base=GLR.roomLightBase[i]*s.ptK;
     var ph=i*2.7;
-    var flick=0.86+0.14*Math.sin(tt*7.3+ph)+0.05*Math.sin(tt*23.1+ph*1.7);
+    var flick=0.88+0.12*Math.sin(tt*7.3+ph)+0.04*Math.sin(tt*23.1+ph*1.7);
     var blip=Math.sin(tt*0.9+ph*3.1);
-    if(blip>0.992) flick*=0.50;
-    GLR.roomLights[i].intensity=base*Math.max(0.10,flick);
+    if(blip>0.992) flick*=0.45;
+    if(s.day<0.3&&Math.sin(tt*0.37+ph*5.3)>0.985) flick*=0.15;   /* 夜里偶尔整盏暗下去一下 */
+    GLR.roomLights[i].intensity=base*Math.max(0.08,flick);
   }
-  GLR.camLight.intensity=LCFG.camI+LCFG.camIk*s.k;
+  lampTick(s);
+  GLR.camLight.intensity=LCFG.camI+LCFG.camIk*s.day;
+}
+/* 路灯：灯头在夜里自发光；离镜头最近的几盏配一盏真点光（数量固定，避免切场景时重编着色器） */
+var OUT_LAMPS=[];
+function lampTick(s){
+  var night=s.indoor?0:1-s.day;
+  if(GLR.lampHeadMat){
+    var c0=[0.36,0.40,0.42], c1=[1.0,0.86,0.62];
+    var lc=mixRGB(c0,c1,smooth01(0.15,0.7,night));
+    GLR.lampHeadMat.color.setRGB(lc[0],lc[1],lc[2]);
+  }
+  if(GLR.winLitMat){
+    var wc=mixRGB([0.20,0.27,0.31],[0.95,0.78,0.48],smooth01(0.2,0.8,night));
+    GLR.winLitMat.color.setRGB(wc[0],wc[1],wc[2]);
+  }
+  if(!GLR.lampPool) return;
+  var i, L=GLR.lampPool;
+  if(S.mode!=='out'||night<0.05||!OUT_LAMPS.length){
+    for(i=0;i<L.length;i++) L[i].intensity=0;
+    return;
+  }
+  GLR.lampPick=(GLR.lampPick||0)-dtG;
+  if(GLR.lampPick<=0){
+    GLR.lampPick=0.35;
+    var cx=GLR.cam.position.x, cz=GLR.cam.position.z;
+    var best=OUT_LAMPS.slice().sort(function(a,b){
+      return ((a.x-cx)*(a.x-cx)+(a.z-cz)*(a.z-cz))-((b.x-cx)*(b.x-cx)+(b.z-cz)*(b.z-cz));
+    });
+    for(i=0;i<L.length;i++){ var b=best[i]; if(b) L[i].position.set(b.x,b.y-0.25,b.z); L[i].userData.on=!!b; }
+  }
+  var tt=GLR.time||0;
+  for(i=0;i<L.length;i++){
+    var fl=1;
+    if(i===1&&Math.sin(tt*1.7)>0.93) fl=0.25+0.5*Math.abs(Math.sin(tt*31));   /* 总有一盏接触不良 */
+    L[i].intensity=L[i].userData.on?LCFG.lampI*smooth01(0.15,0.7,night)*fl:0;
+  }
 }
 
 function teachFrontZ(){
@@ -3879,9 +4578,11 @@ function tileAt(R,wx,wy){
   if(r<0||c<0||r>=R.rows||c>=R.cols) return '#';
   return R.grid[r][c];
 }
-var FURN_SOLID={'d':0.78,'T':0.86,'t':0.76,'k':0.82,'f':0.70,'b':0.34,
-                'l':0.78,'V':0.82,'q':0.76,'n':0.70,'R':0.78,'c':0.34,'p':0.78,'x':0.60,
-                'K':0.84,'C':0.78,'N':0.62,'Z':0.74,'Y':0.52};
+var FURN_SOLID={'d':0.78,'T':0.86,'t':0.76,'k':0.82,'f':0.78,'b':0.34,
+                'l':0.90,'V':0.82,'q':0.90,'n':0.70,'R':0.84,'c':0.34,'p':0.78,'x':0.60,
+                'K':0.84,'C':0.78,'N':0.62,'Z':0.74,'Y':0.52,
+                /* 以前这些都能直接穿过去：垃圾桶、终端、洗手台、隔间、服务器、货架 */
+                'X':0.86,'D':0.72,'w':0.80,'B':0.94,'G':0.94,'Q':0.82,'v':0.72,'A':0.80};
 function solidAtInterior(R,wx,wy){
   var t=tileAt(R,wx,wy);
   if(t==='='){
@@ -3889,10 +4590,17 @@ function solidAtInterior(R,wx,wy){
     return !doorIsOpen(R,wx,wy);
   }
   if(isSolidCh(t)) return true;
-  if(R&&R.stairExtra&&R.stairExtra.length){
-    var lx=wx-R.ox-R.w*0.5, lz=wy-R.oy-R.h*0.5, si;
+  /* stairExtra / propExtra 是米；这里以前直接拿世界单位去比（差 9 倍），楼梯井的挡墙等于没有 */
+  var lx=(wx-R.ox-R.w*0.5)*U2M, lz=(wy-R.oy-R.h*0.5)*U2M, si, sb;
+  if(R&&R.stairExtra){
     for(si=0;si<R.stairExtra.length;si++){
-      var sb=R.stairExtra[si];
+      sb=R.stairExtra[si];
+      if(lx>sb.x0&&lx<sb.x1&&lz>sb.z0&&lz<sb.z1) return true;
+    }
+  }
+  if(R&&R.propExtra){
+    for(si=0;si<R.propExtra.length;si++){
+      sb=R.propExtra[si];
       if(lx>sb.x0&&lx<sb.x1&&lz>sb.z0&&lz<sb.z1) return true;
     }
   }
@@ -3905,13 +4613,16 @@ function solidAtInterior(R,wx,wy){
   return false;
 }
 function solidAtOutdoor(wx,wy){
-  var mx=wx/SC, my=wy/SC;
+  var mx=wx/SC, my=wy/SC, i;
   if(mx<BOUND.x0+4||my<BOUND.y0+4||mx>BOUND.x1-4||my>BOUND.y1-4) return true;
-  for(var i=0;i<OBJ.length;i++){
+  for(i=0;i<OBJ.length;i++){
     var o=OBJ[i];
     if(o.k!=='roof') continue;
-    if(o.id==='garage'||o.id==='garw') continue;    /* 车库口能靠近 */
     if(mx>o.x&&mx<o.x+o.w&&my>o.y&&my<o.y+o.h) return true;
+  }
+  for(i=0;i<OUT_SOLID.length;i++){
+    var q=OUT_SOLID[i];
+    if(mx>q.x0&&mx<q.x1&&my>q.y0&&my<q.y1) return true;
   }
   return false;
 }
@@ -3958,7 +4669,30 @@ function fadeTo(fn){
     f.style.transition='opacity .30s ease'; f.style.opacity='0';
   },170);
 }
+var ENTER_VIA=null;          /* 'stair' / 'out'：决定进楼后站在哪 */
 function enterRoom(id,spawn){ fadeTo(function(){ doEnterRoom(id,spawn); }); }
+/* 找门口 / 楼梯口旁边一格能站的地方，并面朝屋里 */
+function entryNear(R,chs){
+  var r,c,k,best=null;
+  var dirs=[[0,-1],[0,1],[-1,0],[1,0]];
+  for(r=0;r<R.rows&&!best;r++) for(c=0;c<R.cols&&!best;c++){
+    if(chs.indexOf(R.grid[r][c])<0) continue;
+    for(k=0;k<4&&!best;k++){
+      for(var st=1;st<=3;st++){
+        var rr=r+dirs[k][1]*st, cc=c+dirs[k][0]*st;
+        if(rr<1||cc<1||rr>=R.rows-1||cc>=R.cols-1) break;
+        var ch=R.grid[rr][cc];
+        if(ch==='#'||ch==='S') break;
+        if(ch!=='.') continue;
+        var wx=R.ox+(cc+0.5)*R.tw, wy=R.oy+(rr+0.5)*R.th;
+        if(solidAtInterior(R,wx,wy)) continue;
+        best={x:wx,y:wy,ang:Math.atan2(dirs[k][1],dirs[k][0])};
+        break;
+      }
+    }
+  }
+  return best;
+}
 function unstick(){
   try{
     if(S.mode!=='in') return;
@@ -3995,7 +4729,13 @@ function doEnterRoom(id,spawn){
   }
   if(!(spawn&&spawn.seated)) S.seated=false;
   else S.seated=true;
+  var via=ENTER_VIA; ENTER_VIA=null;
   enterWorldRoom(id);
+  if(!spawn){
+    var en=null;
+    try{ en=entryNear(R, via==='stair'?['S']:['O']); if(!en) en=entryNear(R,['O','S','L']); }catch(e){}
+    if(en){ S.x=en.x; S.y=en.y; S.ang=en.ang; }
+  }
   try{ unstick(); }catch(e){}
   GLR.hurt=0;
   showBanner(INTERIORS[id].name);
@@ -4029,7 +4769,7 @@ function syncCamera(dt){
   var dyOff=0, dzOff=0, shake=0;
   if(S.dead){
     var k=S.deadT||0;
-    if(S.death==='floor'){ dyOff=-k*0.62; }
+    if(S.death==='floor'||S.death==='deep'){ dyOff=-Math.min(1.25,k*0.62); }
     shake=Math.max(0,1-k*0.5);
   }
   if(typeof SHAKE_ON!=='undefined' && !SHAKE_ON) shake=0;
@@ -4164,10 +4904,13 @@ function initInput(){
     window.addEventListener('pointercancel',stickEnd);
     stick.addEventListener('lostpointercapture',stickEnd);
     var tr=document.getElementById('tRun');
-    tr.addEventListener('pointerdown',function(e){ TOUCH.run=true; tr.classList.add('held'); e.stopPropagation(); });
-    tr.addEventListener('pointerup',function(e){ TOUCH.run=false; tr.classList.remove('held'); e.stopPropagation(); });
-    tr.addEventListener('pointercancel',function(){ TOUCH.run=false; tr.classList.remove('held'); });
-    tr.addEventListener('lostpointercapture',function(){ TOUCH.run=false; tr.classList.remove('held'); });
+    /* 奔跑键改成"点一下开 / 再点一下关"：手机上一只手推摇杆、一只手转视角，
+       没有第三根手指去一直按着它。摇杆推到底也算奔跑。 */
+    tr.addEventListener('pointerdown',function(e){
+      TOUCH.run=!TOUCH.run;
+      if(TOUCH.run) tr.classList.add('held'); else tr.classList.remove('held');
+      e.stopPropagation();
+    });
     var ta=document.getElementById('tAct');
     ta.addEventListener('pointerdown',function(e){ tryInteract(); e.stopPropagation(); });
   }
@@ -4188,7 +4931,8 @@ function updatePlayer(dt){
     if(KEY['d']||KEY['arrowright']) sd+=1;
     if(TOUCH.active){ fw+=-TOUCH.dy; sd+=TOUCH.dx; }
   }
-  var wantRun=(KEY['shift']||TOUCH.run)&&!locked;
+  var stickFull=TOUCH.active&&Math.hypot(TOUCH.dx,TOUCH.dy)>0.96;
+  var wantRun=(KEY['shift']||TOUCH.run||stickFull)&&!locked;
   S.run=wantRun&&S.stam>6&&(fw!==0||sd!==0);
 
   if(S.seated&&(fw!==0||sd!==0)){ S.seated=false; }
@@ -4248,7 +4992,7 @@ function inClassroomHere(){
 function inDorm(){
   if(S.mode!=='in') return false;
   var R=INTERIORS[S.room];
-  return !!R && R.host==='dormN';
+  return !!R && (R.host==='dormN'||R.host==='dormS');
 }
 function onField(){
   if(S.mode!=='out') return false;
@@ -4318,7 +5062,7 @@ function updateSystems(dt){
     S.san+=0.8*dt;
   }
   S.san=clamp(S.san,0,100);
-  if(S.san<=0&&!S.dead) kill('你在一个不该睡着的地方睡着了。','vignette');
+  if(S.san<=0&&!S.dead) kill('你在一个不该睡着的地方睡着了。梦里有人一直在叫你的名字，叫得很温柔。','vignette');
 
   var wrong=false;
   if(nw==='教室'&&!atMySeat()) wrong=true;
@@ -4350,12 +5094,12 @@ function updateSystems(dt){
   var tier=Math.floor(S.tt/20);
   if(tier>0&&tier!==S.ttTier){
     S.ttTier=tier;
-    var lines=['我：最近睡得挺好。铃一响就醒，不用闹钟。',
-      '我：课表不用看了。我知道下一节是什么。',
-      '我：……今天几号来着？我想不起来了。',
-      '我：走廊里的人走得真整齐。我也走得一样。',
-      '我：我的名字在哪一格上？',
-      '我：我好像一直都在这里。'];
+    var lines=['我：最近睡得挺好。铃一响就醒，不用闹钟。醒的时候，我已经坐在位子上了。',
+      '我：课表不用看了。我知道下一节是什么。我还知道下下节、下下下节。',
+      '我：……今天几号来着？黑板右上角的日期，我从来没见它变过。',
+      '我：走廊里的人走得真整齐。我低头看了一眼——我的脚也在跟着拍子。',
+      '我：座位表上，我的名字在哪一格？……哪一格都是我的名字。',
+      '我：我好像一直都在这里。在我转来之前，就在这里。'];
     if(tier<=6) os(lines[tier-1],4.4);
   }
   if(S.tt<100) S.hiddenLatch=false;
@@ -4366,15 +5110,15 @@ function updateSystems(dt){
 
 function askHiddenChoice(){
   PAUSE.on=true;
-  UI.choice('第 3 节。我的位子空着。',[
+  UI.choice('第 3 节。我的位子空着。\n全班都转过头来，等我坐回去。',[
     {label:'回教室去',fn:function(){ S.tt=86; S.hiddenLatch=false; S.hiddenAsked=false; PAUSE.on=false; }},
-    {label:'……',fn:function(){ S.hiddenAsked=false; kill('你在自己的位子上坐好了。这一次不用再起来了。','names'); }}
+    {label:'……',fn:function(){ S.hiddenAsked=false; kill('你在自己的位子上坐好了。椅子很合身，像是照着你做的。这一次，不用再起来了。','names'); }}
   ]);
 }
 
 function killViol(){
-  if(Math.random()<0.5) kill('有人从后面按住了你的肩膀。你没有回头。','grip');
-  else kill('地板是软的。你下沉的时候，还能听见铃响。','floor');
+  if(Math.random()<0.5) kill('有人从后面按住了你的肩膀。然后是第二只手，第三只。它们都很耐心，一点一点把你按回该在的地方。','grip');
+  else kill('地板变软了。你往下沉，沉得很慢，慢到你能听清头顶上那一声上课铃。','floor');
 }
 
 var ROAM_LIT_NEED=1.6;
@@ -4455,7 +5199,7 @@ function roamTick(dt){
   if(dist<150){ S.san-=dt*1.1; if(!ROAM.seen){ ROAM.seen=1; os('我：车道那头有东西。它不是走路的姿势。',5); } }
   if(dist<230&&!ROAM.toldSpot){ ROAM.toldSpot=1; os('我：车道中间有个高的东西站着。它没在动。',4.4); }
   if(dist<22&&!lit&&ROAM.litAcc<ROAM_LIT_NEED*0.5&&S.enterCool<=0){
-    kill('你在地下车库撞上了那个东西。它一直在等你走过去。','grip');
+    kill('你在黑暗里撞上了它。它很高，很冷，一直站在车道中间，等你自己走过去。','grip');
   }
 }
 var DANGER={garage:{san:0.55},trash:{san:0.40},night:{san:0.30}};
@@ -4466,9 +5210,9 @@ function dangerTick(dt){
   if(!S.dangerSeen) S.dangerSeen={};
   if(!S.dangerSeen[dg]){
     S.dangerSeen[dg]=1;
-    if(dg==='garage') os('我：车库里没有灯。只有最里面那盏在闪。',4.6);
-    else if(dg==='trash') os('我：垃圾房的味道不对。太干净了。',4.2);
-    else os('我：熄灯了。这种时候还在外面走，是要被记的。',4.4);
+    if(dg==='garage') os('我：车库里没有灯。只有最里面那盏在闪——闪的节奏，像有人在开关。',4.6);
+    else if(dg==='trash') os('我：垃圾房的味道不对。太干净了。像刚刚被人舔过一遍。',4.2);
+    else os('我：熄灯了。外面的路灯还亮着，可是它们照不到地面。这种时候还在外面走，是要被记下来的。',4.8);
   }
 }
 
@@ -4588,58 +5332,77 @@ function pickAnomaly(){
   return pool[pool.length-1];
 }
 
+/* ---------- 异象节奏 ----------
+   以前 AN.next 按游戏分钟倒数：上课时时间流速是下课的 6–7 倍，于是课上大约每 10 秒就来一次，
+   一个接一个停不下来。现在按真实秒数计；SAN 越低、违规越多，来得越密。 */
+function anInterval(){
+  var hard=(S.diff==='hard');
+  var base=hard?rnd(24,40):rnd(40,64);
+  base*=0.62+0.38*clamp(S.san,0,100)/100;
+  base*=1-clamp(S.viol,0,100)/260;
+  if(AN.lastBig) base*=1.25;                     /* 大的过去之后，给一口喘气的时间 */
+  return Math.max(10,base);
+}
 function anScheduleNext(){
   try{ AN.pre = pickAnomaly(); }catch(e){ AN.pre=null; }
-  var sb=AN.lastBig?0.62:1;
-  AN.next=(5.2+Math.random()*5.6)*(1+S.viol/110)*(1+(100-S.san)/200)*dif().iv*sb;
-  if(AN.next<2.2) AN.next=2.2;
+  AN.next=anInterval();
+  if(AN.preNext){ AN.next=AN.preNext; AN.preNext=0; }   /* 黑板上预告过的时间，要兑现 */
 }
+/* 只有"看起来就要命"的那几种会直接杀人；其它的按选择 / 表现扣 SAN */
+var AN_LETHAL={rain:1,rite:1,necker:1,moth:1,twin:1,exercise:1};
+var AN_MSG={
+  rain:'我：天一下子暗了。雨不是从云里落下来的——它从很高的地方垂下来，像有人在上面一桶一桶地倒。',
+  moth:'我：灯下面聚了一团飞蛾。不对，不是一团。是一整面墙。它们在往我这边挪。',
+  turn:'……有人从后面拍了一下我的肩膀。很轻。手指是湿的。',
+  broad:'广播：「沙……高二（二）班的同学，请你……留在原地。不要走动。」',
+  bell13:'我：钟响了。一下，两下……我下意识地开始数。',
+  exercise:'我：操场上有一群人在做操。动作整齐得过分。领操台上没有人。',
+  bells:'我：车棚里所有的车铃，在同一刻响了起来。没有风。',
+  hand:'我：隔间底下的缝里，伸出来一只手。手心朝上，指甲缝里是黑的。',
+  repeat:'后桌（贴着我的后脑勺）：「……你作业，交了吗？」',
+  chalk:'我：黑板上，有人在写字。粉笔自己在动。',
+  loop:'我：走廊尽头那扇门……我已经第三次走到它面前了。',
+  roster:'我：墙上多了一张名单。纸是新的。上面有我的名字——被一道红线划掉了。',
+  leak:'我：天花板在往下滴水。今天没有下雨。水是温的。',
+  rite:'我：地上有一个粉笔画的圈，线还很新。圈里摆着四根白蜡烛。圈的正中，空着一个人的位置。',
+  cold:'我：食堂最东边那扇门后面冷得像冰柜。门缝里，有什么东西在轻轻地敲。',
+  shifting:'我：窗外的楼……在动。很慢，一栋一栋地挪。',
+  stare:'我：全班同时回过头来看着我。没有人眨眼。',
+  lamps:'我：走廊的灯一盏一盏亮了起来。它在跟着我。',
+  feast:'我：食堂里摆了一长桌菜，还冒着热气。每一副碗筷前面，都有一张写着名字的纸条。',
+  necker:'我：围墙外面有个人在走。我走他也走，我停他也停。他的脖子……太长了。',
+  shadow:'我：我的影子慢了半拍。它刚刚，自己动了一下。',
+  twin:'我：天台的另一头站着一个人。穿着我们学校的校服。他站的姿势，和我一模一样。',
+  raindots:'我：雨点落在地上，没有散开。它们在排队。'
+};
 function anStart(){
   var id=null;
-  if(S.diff==='easy'&&AN.pre&&anAllowed(AN.pre)) id=AN.pre;
+  if((S.diff==='easy'||AN.locked)&&AN.pre){
+    if(anAllowed(AN.pre)) id=AN.pre;
+    else if(AN.locked&&!AN.lockWait){ AN.lockWait=1; AN.next=4; return; }   /* 预报过的那个，等你走到它能出现的地方 */
+  }
+  AN.locked=false; AN.lockWait=0;
   AN.pre=null;
   if(!id) id=pickAnomaly();
-  if(!id){ anScheduleNext(); AN.next=Math.min(AN.next,3.2); return; }
+  if(!id){ anScheduleNext(); AN.next=Math.min(AN.next,6); return; }
   AN.id=id; AN.t=0; AN.acc=0; AN.active=true; AN.data={}; AN.sub=0;
   AN.lastBig=!AN_SMALL[id];
   if(AN_COOL[id]!==undefined||id==='rain'||id==='moth'||id==='raindots') AN.cool[id]=S.tsec;
   if(id==='rain'||id==='moth'||id==='raindots') AN.rained=true;
-  var msg={
-    rain:'我：雨没停过。我的鞋已经透了。',
-    moth:'我：飞蛾在往一个点上撞。那片墙在动。',
-    turn:'我：有人从后面拍了我一下。',
-    broad:'广播：……高三二班，请你回到教室。',
-    bell13:'我：钟在响。一下，两下……它没有停。',
-    exercise:'我：操场上那群人在做操。可是现在是课间。',
-    bells:'我：车棚里所有的铃，一起响了。',
-    hand:'我：隔间底下伸过来一只手。手心朝上。',
-    repeat:'后桌：你作业交了吗？',
-    chalk:'我：黑板上有字在往下写。',
-    loop:'我：走廊尽头那道门，我已经走过三次了。',
-    roster:'我：墙上多了一张名单。上面有我的名字，被划掉了。',
-    leak:'我：天花板在滴水。可是今天没下雨。',
-    rite:'我：实验楼中间画了一个圈。粉笔线还是新的。',
-    cold:'我：食堂最东边那扇门后面，冷得像冰柜。',
-    shifting:'我：窗外的楼在动。一栋一栋地挪。',
-    stare:'我：全班一起回过头来看着我。',
-    lamps:'我：走廊的灯一盏一盏亮起来，在跟着我走。',
-    feast:'我：食堂里摆了一大桌菜。没有人。',
-    necker:'我：围墙外面有个人在走。他一直在跟着我。',
-    shadow:'我：我的影子慢了半拍。',
-    twin:'我：天台另一头站着一个人。他穿着我校服。',
-    raindots:'我：雨点落在地上，排成了字。'
-  };
-  os(msg[id]||'我：……',4.2);
+  os(AN_MSG[id]||'我：……',4.6);
+  try{ SFX.anomaly&&SFX.anomaly(id); }catch(e){}
   anOn(id);
 }
 function anEnd(){
+  if(!AN.active&&AN.id===null) return;
   var id=AN.id;
   anOff(id);
-  if(id==='roster'&&!AN.data.solved){
-    S.viol=Math.min(100,S.viol+30);
-    os('我：那张名单，我什么都没做。',3.6);
+  if(id==='roster'&&!AN.data.done){
+    S.viol=Math.min(100,S.viol+18);
+    os('我：那张名单我没动。走开的时候，我听见身后有笔尖划过纸的声音。',4.0);
   }
-  if(id==='chalk'){ /* 无惩罚 */ }
+  try{ traceAdd(id); }catch(e){}
+  try{ SFX.anomalyEnd&&SFX.anomalyEnd(id); }catch(e){}
   AN.id=null; AN.active=false; AN.acc=0;
   anScheduleNext();
 }
@@ -4664,26 +5427,47 @@ function entFace(){
   }
 }
 
+var HAS_FX={rain:1,moth:1,exercise:1,necker:1,twin:1,hand:1,shadow:1,
+  leak:1,rite:1,feast:1,lamps:1,chalk:1,roster:1,broad:1,repeat:1,shifting:1,cold:1,raindots:1};
+/* 选一个在玩家前方、站得住的点（世界单位） */
+function aheadPoint(dist){
+  var a, k, tries=[0,0.6,-0.6,1.2,-1.2,PI];
+  for(k=0;k<tries.length;k++){
+    a=S.ang+tries[k];
+    var x=S.x+Math.cos(a)*dist, y=S.y+Math.sin(a)*dist;
+    if(!solidAt(x,y)) return {x:x,y:y};
+  }
+  return {x:S.x,y:S.y};
+}
 function anOn(id,silent){
   var d=AN.data;
-  try{
-    var srcX=S.x, srcY=S.y;
-    if(id==='exercise'||id==='shadow'||id==='rain'){ srcX=S.x; srcY=S.y; }
-    if(id==='necker'){ srcX=BOUND.x1*SC-40; srcY=S.y; }
-    if(id==='moth'||id==='hand'||id==='twin'){ srcX=S.x; srcY=S.y; }
-    var HAS_FX={rain:1,moth:1,exercise:1,necker:1,twin:1,hand:1,shadow:1,
-      leak:1,rite:1,feast:1,lamps:1,chalk:1,roster:1,broad:1,repeat:1,shifting:1,cold:1};
-    if(HAS_FX[id]) anfxSpawn(id, srcX, srcY);
-  }catch(e){}
+  var srcX=S.x, srcY=S.y;
+  /* 以前好几个异象的"看得见的东西"和"判定用的位置"不在一个地方：
+     天台的另一个你就生在玩家脚下、仪式圈半径和判定半径差一倍、渗水点和水渍各算各的。 */
+  if(id==='rite'){ var rp=aheadPoint(40); d.c={x:rp.x,y:rp.y}; srcX=rp.x; srcY=rp.y; }
+  if(id==='moth'||id==='exercise'){ d.src={x:S.x,y:S.y}; }
+  if(id==='necker'){ srcX=BOUND.x1*SC+16; srcY=S.y; }
+  if(id==='twin'&&INTERIORS[S.room]){
+    var RR=INTERIORS[S.room];
+    var cxr=RR.ox+RR.w/2, cyr=RR.oy+RR.h/2;
+    d.x=cxr-(S.x-cxr)*0.8; d.y=cyr-(S.y-cyr)*0.8;           /* 天台的另一头，正对着你 */
+    if(solidAt(d.x,d.y)){ d.x=RR.ox+RR.w*0.22; d.y=RR.oy+RR.h*0.25; }
+    d.room=S.room; srcX=d.x; srcY=d.y;
+  }
+  if(id==='leak'){
+    d.pts=[];
+    for(var i=0;i<5;i++){ var lp=aheadPoint(rnd(10,34)); d.pts.push({x:lp.x+rnd(-14,14),y:lp.y+rnd(-14,14)}); }
+  }
+  if(id==='hand'){ var hp=aheadPoint(8); srcX=hp.x; srcY=hp.y; }
+  if(id==='roster'){ d.rx=S.x; d.ry=S.y; d.done=false; }
+  try{ if(HAS_FX[id]) anfxSpawn(id, srcX, srcY); }catch(e){}
   AN.rained = AN.rained || (id==='rain');
   if(id==='chalk'){
-    d.until=S.tsec+AN.next;
-    os('我：黑板上在写时间——'+fmtClock(d.until)+'。那是下一次。',5);
-  }
-  if(id==='roster'){
-    d.solved=false;
-    d.carrier = S.mode==='out'?'ground':corridorHere()?'board':
-      inClassroomHere()?'roll':inCanteen()?'canteen':inDorm()?'duty':inToiletHere()?'paper':'paper';
+    /* 黑板上写的是"下一次"的钟点：先把下一次的间隔掷出来，结束时照着兑现 */
+    AN.preNext=anInterval();
+    var mins=Math.round((16+AN.preNext)*rateAt(S.tsec)/60);
+    d.until=S.tsec+mins;
+    os('我：黑板上写着一个时间——'+fmtClock(d.until)+'。字迹和我的一模一样。',5);
   }
   if(id==='turn'){ d.chosen=null; }
   if(id==='hand'){ d.chosen=null; }
@@ -4694,65 +5478,108 @@ function anOn(id,silent){
 
 function anOff(id){ entClear(); try{ anfxClear(); }catch(e){} }
 
+/* 非致命异象的"惩罚"：吓一下、扣 SAN，然后结束 */
+function anHurt(msg,loss,opt){
+  opt=opt||{};
+  var k=(S.diff==='hard')?1.25:0.9;
+  S.san=Math.max(0,S.san-loss*k);
+  GLR.hurt=Math.max(GLR.hurt||0,0.65);
+  GLR.flash=Math.max(GLR.flash||0,0.25);
+  if(opt.face) try{ scareFace(); }catch(e){}
+  try{ SFX.sting&&SFX.sting(); }catch(e){}
+  os(msg,4.4);
+  if(S.san<=0&&!S.dead){ kill('你一直撑着的那根弦，断了。','vignette'); return; }
+  if(!opt.keep) anEnd();
+}
+/* 一张苍白的脸贴到镜头前 0.4 秒 */
+function scareFace(){
+  if(GLR.scareM){ try{ GLR.cam.remove(GLR.scareM); }catch(e){} }
+  var g=new THREE.Group();
+  var skin=new THREE.MeshBasicMaterial({color:0xc8c0b2,fog:false,depthTest:false});
+  var dark=new THREE.MeshBasicMaterial({color:0x050607,fog:false,depthTest:false});
+  function bx(m,w,h,d,x,y,z){ var o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m); o.position.set(x,y,z); o.renderOrder=1000; g.add(o); }
+  bx(skin,0.34,0.46,0.02,0,0,0);
+  bx(dark,0.08,0.05,0.01,-0.08,0.06,0.012);
+  bx(dark,0.08,0.05,0.01, 0.08,0.06,0.012);
+  bx(dark,0.14,0.10,0.01,0,-0.12,0.012);        /* 嘴张着 */
+  g.position.set(0,-0.02,-0.42);
+  GLR.cam.add(g); GLR.scareM=g;
+  setTimeout(function(){ try{ GLR.cam.remove(g); }catch(e){} if(GLR.scareM===g) GLR.scareM=null; },380);
+}
+/* 能躲雨的地方：屋里、柱廊下、车棚、连廊下 */
+function underCover(){
+  if(S.mode==='in') return true;
+  if(USE.brollyShield) return true;
+  var mx=S.x/SC, my=S.y/SC, i, o;
+  for(i=0;i<OBJ.length;i++){
+    o=OBJ[i];
+    if(o.k==='link'&&mx>o.x&&mx<o.x+o.w&&my>o.y&&my<o.y+o.h) return true;
+    if(o.open1f&&mx>o.x&&mx<o.x+o.w&&my>o.y+o.h&&my<o.y+o.h+12) return true;
+    if(o.id==='shed'&&mx>o.x-3&&mx<o.x+o.w+3&&my>o.y-3&&my<o.y+o.h+3) return true;
+  }
+  return false;
+}
+
 function anTick(dt){
   if(!AN.active||AN.id===null) return;
-  var id=AN.id, d=AN.data;
+  var id=AN.id, d=AN.data, hard=(S.diff==='hard');
   AN.t+=dt;
   if(AN.t>45){ anEnd(); return; }
   switch(id){
     case 'rain':
-      if(S.mode==='in'||USE.brollyShield){ AN.acc=Math.max(0,AN.acc-dt*0.6); }
-      else { AN.acc+=dt; S.san-=dt*0.9; }
-      if(AN.acc>6) anKill('雨灌进了你的肺里。你听见自己像一只桶。','drown');
+      if(underCover()){
+        AN.acc=Math.max(0,AN.acc-dt*0.6);
+        if(!d.cov&&S.mode==='out'){ d.cov=1; os('我：躲到了檐下。雨声一下子远了，可我还是能听见它在找我。',3.6); }
+      }else{ AN.acc+=dt; S.san-=dt*0.7; d.cov=0; }
+      if(AN.acc>(hard?9:14)) anKill('雨灌进了你的肺里。你听见自己在身体里晃，像一只装满水的桶。','drown');
+      else if(AN.acc>(hard?5:8)&&!d.warn){ d.warn=1; os('我：喘不上气了。得找个有顶的地方——屋檐、柱廊、车棚，哪里都行。',3.6); }
       if(AN.t>26) anEnd();
       break;
     case 'moth':
-      if(!d.src){ d.src={x:S.x,y:S.y}; }
       var dm=Math.sqrt(dist2(d.src.x,d.src.y,S.x,S.y));
       if(dm>120) AN.acc=Math.max(0,AN.acc-dt*1.4);
-      else { AN.acc+=dt; S.san-=dt*2.2; }
-      if(AN.acc>5.5) anKill('蛾群把你裹住了。它们比你想的要多。','swarm');
+      else { AN.acc+=dt; S.san-=dt*1.6; }
+      if(AN.acc>(hard?4.5:6.5)) anKill('蛾群把你裹住了。翅膀上的粉落进你的眼睛里，很痒。然后什么都不痒了。','swarm');
       if(AN.t>24) anEnd();
       break;
     case 'turn':
       if(d.chosen===null){
         if(AN.t>1.2&&!d.asked){
           d.asked=true;
-          UI.choice('背后有只手，拍了一下我的肩膀。',[
+          UI.choice('背后有只手，拍了一下我的肩膀。它还搭在那儿。',[
             {label:'不回头',fn:function(){ d.chosen='no'; UI.closeChoice(); }},
             {label:'回头看',fn:function(){ d.chosen='yes'; UI.closeChoice(); }}
           ]);
         } else if(d.asked&&d.chosen===null&&AN.t>11){ d.chosen='no'; UI.closeChoice(); }
       }else if(d.chosen==='yes'){
-        AN.acc+=dt; S.san-=dt*(2.6+AN.acc*1.9);
-        if(AN.acc>0.6) anKill('你回头了。它的脸离你只有一寸。','gaze');
+        AN.acc+=dt;
+        if(AN.acc>0.5) anHurt('我回头了。它的脸离我只有一寸——没有五官，只有一层湿透的皮。下一秒，什么都没有了。肩膀上还是凉的。',26,{face:1});
       }else{
         AN.acc+=dt;
-        if(AN.acc>=7.8){ S.san=Math.min(100,S.san+6); addClue('turn'); anEnd(); }
+        if(AN.acc>=7.8){ S.san=Math.min(100,S.san+6); addClue('turn'); os('我：那只手慢慢松开了。我一直没有回头。',3.4); anEnd(); }
       }
       break;
     case 'broad':
       if(S.moving&&!S.seated){ AN.acc+=dt; }
-      if(AN.acc>1.6) anKill('广播念完了你的一生。最后一句是：请到教导处来一趟。','voice');
-      if(AN.t>4.2) anEnd();
+      if(AN.acc>1.6) anHurt('广播停了一下。然后，它念出了我现在站着的位置——精确到哪一块地砖。',18);
+      else if(AN.t>5.2){ os('广播：「……谢谢配合。」',2.6); anEnd(); }
       break;
     case 'bell13':
-      if(S.seated&&S.room==='teach1'){ anEnd(); break; }
+      if(S.seated&&S.room==='teach1'){ os('我：我坐回自己的位子上。钟声在第十二下停了。',3.4); anEnd(); break; }
       S.san-=dt*0.22;
-      if(AN.t>15) anKill('第十三下敲完的时候，你不在自己的位子上。','bell');
+      if(AN.t>15) anHurt('第十三下。我数得很清楚——可是我不记得自己是从哪一下开始数的。',20);
       break;
     case 'exercise':
-      if(!d.src){ d.src={x:S.x,y:S.y}; }
       var de=Math.sqrt(dist2(d.src.x,d.src.y,S.x,S.y));
       if(de>120){ AN.acc=Math.max(0,AN.acc-dt*0.8); }
       else { AN.acc+=dt; }
-      if(AN.acc>2.2) anKill('你开始跟着做操。一旦开始，就停不下来了。','follow');
+      if(AN.acc>(hard?3.6:5.2)) anKill('你开始跟着做操。手臂抬起来的时候你才发现，你早就停不下来了。','follow');
       if(AN.t>22) anEnd();
       break;
     case 'bells':
       var db=nearObj('shed',0);
-      if(db<110){ AN.acc+=dt; } else if(db>110){ AN.acc=Math.max(0,AN.acc-dt*1.2); }
-      if(AN.acc>2.0) anKill('所有铃同时响的那一刻，你散了。','shatter');
+      if(db<110){ AN.acc+=dt; } else { AN.acc=Math.max(0,AN.acc-dt*1.2); }
+      if(AN.acc>2.0) anHurt('所有车铃同时响的那一刻，耳朵里只剩下"嗡"的一声。过了很久，我才听见自己的心跳。',15);
       if(AN.t>18) anEnd();
       break;
     case 'hand':
@@ -4761,14 +5588,16 @@ function anTick(dt){
           d.asked=true;
           UI.choice('隔间底下伸来一只手。手心朝上，像在等什么。',[
             {label:'不动',fn:function(){ d.chosen='no'; UI.closeChoice(); }},
-            {label:'接过来',fn:function(){ d.chosen='yes'; UI.closeChoice(); }}
+            {label:'把手放上去',fn:function(){ d.chosen='yes'; UI.closeChoice(); }}
           ]);
         } else if(d.asked&&d.chosen===null&&AN.t>11){ d.chosen='no'; UI.closeChoice(); }
       }else if(d.chosen==='yes'){
-        anKill('你握住了它。它把你从隔间底下拉了过去。','hand');
+        var lost=null;
+        if(S.bag.length){ lost=S.bag[Math.floor(Math.random()*S.bag.length)]; removeItem(lost); }
+        anHurt('它握住了我，握得很紧，指甲陷进肉里。等我把手抽回来——'+(lost?'口袋里的「'+ITEMS[lost].n+'」不见了。':'掌心多了一道指甲印，弯弯的，像在笑。'),20);
       }else{
         AN.acc+=dt;
-        if(AN.acc>2.2){ addClue('hand'); anEnd(); }
+        if(AN.acc>2.2){ addClue('hand'); os('我：那只手在原地停了很久，然后慢慢缩了回去。',3.2); anEnd(); }
       }
       break;
     case 'repeat':
@@ -4779,15 +5608,15 @@ function anTick(dt){
           if(S.bag.indexOf('hw')>=0) opts.push({label:'把作业本递过去',fn:function(){ d.chosen='hw'; UI.closeChoice(); }});
           opts.push({label:'不出声',fn:function(){ d.chosen='quiet'; UI.closeChoice(); }});
           opts.push({label:'说出一个名字',fn:function(){ d.chosen='name'; UI.closeChoice(); }});
-          UI.choice('后桌：你作业交了吗？',opts);
+          UI.choice('后桌：「你作业交了吗？」',opts);
         } else if(d.asked&&d.chosen===null&&AN.t>15){ d.chosen='quiet'; UI.closeChoice(); }
       }else if(d.chosen==='hw'){
-        S.san=Math.min(100,S.san+12); removeItem('hw'); anEnd();
+        S.san=Math.min(100,S.san+12); removeItem('hw'); os('我：后面那只手接过了作业本，翻了一页，又翻了一页。然后安静了。',3.6); anEnd();
       }else if(d.chosen==='name'){
-        anKill('你说出了一个名字。全班同时应了一声。','gaze');
+        anHurt('我说出了一个名字。全班同时应了一声——"到"。没有一个声音是我认识的。',20);
       }else{
         AN.acc+=dt;
-        if(AN.acc>14){ S.san-=6; addClue('repeat'); anEnd(); }
+        if(AN.acc>14){ S.san-=6; addClue('repeat'); os('我：他问了十四遍。第十五遍的时候，他叫的是我的名字。',3.6); anEnd(); }
       }
       break;
     case 'chalk':
@@ -4795,109 +5624,107 @@ function anTick(dt){
       if(AN.t>16) anEnd();
       break;
     case 'loop':
-      if(KEY['shift']||KEY[' ']){ AN.acc+=dt*2.6; }
+      if(KEY['shift']||KEY[' ']||S.run){ AN.acc+=dt*2.6; }
       else { AN.acc+=dt; }
       S.san-=dt*0.3;
-      if(AN.acc>14) anEnd();
+      if(AN.acc>14){ os('我：门终于是另一扇了。门牌上的班号，比刚才大了一。',3.4); anEnd(); }
       break;
     case 'roster':
       if(d.done){ anEnd(); break; }
-      if(AN.t>16){
-        if(!d.solved){ S.viol=Math.min(100,S.viol+30); os('我：那张名单，我什么都没做。',3.4); }
-        anEnd();
-      }
+      if(AN.t>18) anEnd();
       break;
     case 'leak':
-      if(!d.pts){ d.pts=[]; for(var i=0;i<5;i++) d.pts.push({x:S.x+rnd(-30,30),y:S.y+rnd(-30,30)}); }
+      if(d.hurt){ if(AN.t>20) anEnd(); break; }
       var on=false;
-      for(i=0;i<d.pts.length;i++){ if(dist2(d.pts[i].x,d.pts[i].y,S.x,S.y)<8*8) on=true; }
+      for(var i=0;i<d.pts.length;i++){ if(dist2(d.pts[i].x,d.pts[i].y,S.x,S.y)<10*10) on=true; }
       if(on){ AN.acc+=dt; } else { AN.acc=Math.max(0,AN.acc-dt); }
-      if(AN.acc>1.5) anKill('你被浇透了。水是温的。','water');
+      if(AN.acc>1.5){ d.hurt=1; anHurt('水滴进了我的衣领。是温的，有一股铁锈味。我抬头——天花板上那块水渍，形状像一个人趴在上面。',12,{keep:1}); }
       if(AN.t>20) anEnd();
       break;
     case 'rite':
-      if(!d.c){ d.c={x:S.x,y:S.y}; }
       var dr=Math.sqrt(dist2(d.c.x,d.c.y,S.x,S.y));
-      if(dr<30){ AN.acc+=dt; S.san-=dt*2.0; }
-      if(AN.acc>2) anKill('你走进了那个圈，然后圈把你收了起来。','ring');
+      if(dr<19){ AN.acc+=dt; S.san-=dt*2.0; if(!d.warn){ d.warn=1; os('我：我踩到粉笔线了。蜡烛的火苗一起朝我这边歪。',3.0); } }
+      else AN.acc=Math.max(0,AN.acc-dt*0.5);
+      if(AN.acc>(hard?1.4:2.2)) anKill('你走进了那个圈。正中那个空着的位置，刚好是你的大小。','ring');
       if(AN.t>20) anEnd();
       break;
     case 'cold':
       if(d.chosen===null){
         if(AN.t>1.4&&!d.asked){
           d.asked=true;
-          UI.choice('最东边那扇门后面，冷得像冰柜。里面有东西。',[
-            {label:'再走近一点',fn:function(){ d.chosen='near'; UI.closeChoice(); }},
+          UI.choice('最东边那扇门后面，冷得像冰柜。门缝里有东西在敲，很有节奏。',[
+            {label:'把门拉开一条缝',fn:function(){ d.chosen='near'; UI.closeChoice(); }},
             {label:'转身就走',fn:function(){ d.chosen='away'; UI.closeChoice(); }}
           ]);
         } else if(d.asked&&d.chosen===null&&AN.t>11){ d.chosen='near'; UI.closeChoice(); }
       }else if(d.chosen==='near'){
-        S.san=Math.min(100,S.san+16);
-        os('我：里面挂着的是一排冻硬的校服。最外面那件，袖子上有我的名字。',5);
+        S.san=Math.min(100,S.san+14);
+        os('我：里面挂着一排冻硬的校服，袖子在风里互相敲。最外面那件的胸口，绣着我的名字。……我反而不怕了。',5.4);
         anEnd();
       }else{
-        S.san=Math.max(0,S.san-20);
-        os('我：我走了。可是背后那个温度，跟着我走了很远。',4.2);
+        S.san=Math.max(0,S.san-16);
+        os('我：我走了。那股冷气跟着我，一直贴在后颈上，走了很远都没散。',4.2);
         anEnd();
       }
       break;
     case 'shifting':
-      S.san-=dt*0.6;
-      if(AN.t>18){ os('我：钟楼没动。整片校园里，只有钟楼没动。',4.6); anEnd(); }
+      S.san-=dt*0.5;
+      if(AN.t>18){ os('我：楼停下来了。整片校园里，只有钟楼一直没动——它在看着别的楼。',4.6); anEnd(); }
       break;
     case 'stare':
       if(!S.moving){ AN.acc+=dt; } else { AN.acc=Math.max(0,AN.acc-dt); }
-      if(AN.acc>1.8) anKill('你站住了。于是全班一起站了起来。','stare');
-      if(AN.t>12) anEnd();
+      if(AN.acc>1.8) anHurt('我站住了。于是全班一起站了起来，椅子腿在地上刮出同一声。然后他们又一起坐下。',18);
+      else if(AN.t>12){ os('我：他们慢慢地转回去了。最后转回去的，是我的同桌。',3.4); anEnd(); }
       break;
     case 'lamps':
       if(!S.moving){ AN.acc+=dt; } else { AN.acc=Math.max(0,AN.acc-dt*0.8); }
-      if(AN.acc>1.6) anKill('灯停在你头顶。它想让你看清楚自己。','lamps');
-      if(AN.t>16) anEnd();
+      if(AN.acc>1.6) anHurt('灯停在了我头顶，亮得发白。有一瞬间，我看见了自己手背里的骨头。',16);
+      else if(AN.t>16){ os('我：灯一盏一盏地灭回去。最后一盏在我前面，灭得很慢，像在等我。',3.6); anEnd(); }
       break;
     case 'feast':
       if(!inCanteen()){ AN.acc=Math.max(0,AN.acc-dt*0.5); }
       else { AN.acc+=dt; }
-      if(AN.acc>(S.talent==='stomach'?17:9)) anKill('你坐下了。菜还是热的。','deep');
-      if(AN.t>24) anEnd();
+      if(AN.acc>(S.talent==='stomach'?17:9)){
+        S.tsec=((S.tsec+20)%1440+1440)%1440;
+        anHurt('我回过神来的时候，嘴里有东西。我不记得自己坐下过。面前的碗是空的，上面那张纸条写着我的名字。',22);
+      }
+      if(AN.active&&AN.t>24) anEnd();
       break;
     case 'necker':
       var wallX=BOUND.x1*SC;
       var dToWall=Math.abs(wallX-S.x);
-      if(dToWall<150*SC/2){ S.san-=dt*1.4; }
-      if(dToWall<90*SC/2){ AN.acc+=dt; } else { AN.acc=Math.max(0,AN.acc-dt); }
-      if(AN.acc>1.6) anKill('他没有绕到校门口。他从墙里直接走了进来。','neck');
+      if(dToWall<150*SC/2){ S.san-=dt*1.2; }
+      if(dToWall<90*SC/2){ AN.acc+=dt; if(!d.warn){ d.warn=1; os('我：他停下来了。他在等我再走近一点。',3.0); } } else { AN.acc=Math.max(0,AN.acc-dt); }
+      if(AN.acc>(hard?1.4:2.2)) anKill('他没有绕到校门口。他把脖子从围栏的缝里伸了进来，一直伸，一直伸。','neck');
       if(AN.t>20) anEnd();
       break;
     case 'shadow':
-      if(S.mode==='in'){ AN.acc=Math.max(0,AN.acc-dt*0.6); }
-      else { AN.acc+=dt; S.san-=dt*1.1; }
-      if(AN.acc>10) anKill('影子追上来了。它比你先到。','shadow');
-      if(AN.t>22) anEnd();
+      if(underCover()){ AN.acc=Math.max(0,AN.acc-dt*0.6); }
+      else { AN.acc+=dt; S.san-=dt*0.8; }
+      if(AN.acc>10) anHurt('影子追上来了，和我叠在一起。有一瞬间，我分不清是谁先抬的手。',18);
+      if(AN.active&&AN.t>22) anEnd();
       break;
     case 'twin':
-      if(!INTERIORS[S.room]){ anEnd(); break; }
-      if(!d.placed){ d.placed=true; var RR=INTERIORS[S.room];
-        d.x=RR.ox+RR.w*0.22; d.y=RR.oy+RR.h*0.25; }
+      if(!INTERIORS[S.room]||S.room!==d.room){ os('我：我下了楼。楼梯上一直有第二个人的脚步声，比我慢半拍。',3.6); anEnd(); break; }
       var dtwin=Math.sqrt(dist2(d.x,d.y,S.x,S.y));
-      if(dtwin<20) anKill('你碰了他。他的手是热的。','twin');
-      if(AN.t>22) anEnd();
+      /* 你不看他的时候，他就往你这边走 */
+      var look=angDiff(Math.atan2(d.y-S.y,d.x-S.x),S.ang)<0.6;
+      if(!look&&dtwin>16){
+        var sp=(hard?26:18)*dt, ux=(S.x-d.x)/dtwin, uy=(S.y-d.y)/dtwin;
+        d.x+=ux*sp; d.y+=uy*sp;
+        if(!d.moved){ d.moved=1; os('我：……他刚才是不是动了？',2.6); }
+      }
+      if(dtwin<16) anKill('他走到了你面前。你们同时抬起手。他的手，是热的。','twin');
+      if(AN.t>22){ os('我：他转身，从天台边上走了下去。没有声音。',3.4); anEnd(); }
       break;
     case 'raindots':
-      S.san-=dt*0.5;
-      if(AN.t>14){ os('我：地上的字写着——明天的天气：阴。',4.4); anEnd(); }
+      S.san-=dt*0.4;
+      if(AN.t>14){ os('我：地上的字写着——明天的天气：阴。明天的值日：你。',4.4); anEnd(); }
       break;
   }
 }
 
 function anKill(msg,fx){
-  if(S.day===1&&S.diff==='easy'){
-    S.san=Math.max(0,S.san-10);
-    var nm=AN.id;
-    os('（我猛地回过神来。……差点就走不掉了。）',3.4);
-    try{ if(nm) anEnd(); }catch(e){ AN.active=false; AN.id=null; anScheduleNext(); }
-    return;
-  }
   var f=fx||DFX_MAP[AN.id]||'vignette';
   kill(msg,f);
 }
@@ -4905,17 +5732,16 @@ function anKill(msg,fx){
 function anDrive(dt){
   if(S.fn&&S.fn.on&&S.fn.v<72){ return; }
   if(!AN.active){
-    AN.next -= dt*rateAt(S.tsec)/60;
+    AN.next -= dt;
     if(AN.next<=0) anStart();
   } else {
     anTick(dt);
   }
 }
 
-
 var USE={torch:false,phone:false,brollyShield:false};
 var OPENDOORS={};
-var DOOR_LOCKS={'lab3:39:3':'roomkey'};
+var DOOR_LOCKS={'lab3:41:15':'roomkey'};
 function doorLockNeed(R,c,r){ return DOOR_LOCKS[R.id+':'+c+':'+r]||null; }
 function doorKeyAt(R,c,r){ return S.room+':'+c+':'+r; }
 function doorKey(R,wx,wy){
@@ -4930,6 +5756,7 @@ function addItem(id){
   if(S.bag.indexOf(id)>=0) return false;
   if(S.bag.length>=8){ os('我：装不下了。',2.4); return false; }
   S.bag.push(id);
+  try{ SFX.pickup(); }catch(e){}
   os('我：拿到了「'+ITEMS[id].n+'」。',2.6);
   UI.bagDirty=true;
   return true;
@@ -4962,7 +5789,21 @@ function useItem(id){
   if(id==='snack'){ S.stam=Math.min(100,S.stam+35); removeItem('snack'); os('我：甜的。',2.4); toast('士力架 · 体力 +35'); return; }
   if(id==='coin'){ throwCoin(); return; }
   if(id==='watch'){ toast('现在是 '+fmtClock(S.tsec)); os('我：现在是 '+fmtClock(S.tsec)+'。',2.6); return; }
-  if(id==='compass'){ toast('指针在动'); os('我：指针指向最近的那扇门。',2.6); return; }
+  if(id==='compass'){ useCompass(); return; }
+  if(id==='memo'){
+    S.spots.data=1; S.spots.comp=1; UI.spotsDirty=true;
+    os('我：纸条上是一行潦草的字：「实验楼 3F 网络中心 → 行政楼 3F 门禁机 → 西小门。钥匙在保安室。」最后一个字被划得很深。',6);
+    toast('记下了：机房 · 数据终端');
+    return;
+  }
+  if(id==='map'){
+    var mapIds=['guard','garage','trash','wall'], mk;
+    for(mk=0;mk<mapIds.length;mk++) S.spots[mapIds[mk]]=1;
+    UI.spotsDirty=true;
+    os('我：平面图上有几个地方被反复描过：保安岗、车库、垃圾房、东围墙。',4.2);
+    UI.open('mapv');
+    return;
+  }
   if(id==='card'||id==='map'||id==='notebook'||id==='memo'||id==='hw'||id==='usb'||id==='key'||id==='roomkey'||id==='metronome'||id==='goggles'||id==='coat'||id==='battery'||id==='chalk'||id==='pen'){
     os('我：'+nm+'。'+ITEMS[id].d,3.0);
     toast(nm+(hasItem('notebook')&&hasItem('pen')?' · 线索会写进本子':''));
@@ -4970,6 +5811,36 @@ function useItem(id){
   }
   os('我：现在用不上「'+nm+'」。',2.2);
   toast('「'+nm+'」现在用不上');
+}
+/* 罗盘：室内指最近的门 / 楼梯，室外指还没去过的线索点（都去过了就指最近的校门） */
+function useCompass(){
+  var tx=null, ty=null, what='';
+  if(S.mode==='in'){
+    var R=INTERIORS[S.room], best=1e9, r, c;
+    if(R) for(r=0;r<R.rows;r++) for(c=0;c<R.cols;c++){
+      var ch=R.grid[r][c]; if(ch!=='O'&&ch!=='S'&&ch!=='L'&&ch!=='=') continue;
+      var wx=R.ox+(c+0.5)*R.tw, wy=R.oy+(r+0.5)*R.th, d=dist2(wx,wy,S.x,S.y);
+      if(d<best&&d>9*9){ best=d; tx=wx; ty=wy; what=(ch==='S'?'楼梯':ch==='O'?'出口':ch==='L'?'连廊':'门'); }
+    }
+  }else{
+    var bd=1e18, i;
+    for(i=0;i<SPOTS.length;i++){
+      var sp=SPOTS[i]; if(S.spots[sp.id]) continue;
+      var cx=(sp.x+sp.w/2)*SC, cy=(sp.y+sp.h/2)*SC, d2=dist2(cx,cy,S.x,S.y);
+      if(d2<bd){ bd=d2; tx=cx; ty=cy; what='某个我还没去过的地方'; }
+    }
+    if(tx===null){
+      var gs=[[GATE_N,'北门'],[GATE_W,'西小门'],[GATE_S,'南门']];
+      for(i=0;i<gs.length;i++){ var gx=gs[i][0].x*SC, gy=gs[i][0].y*SC, d3=dist2(gx,gy,S.x,S.y); if(d3<bd){ bd=d3; tx=gx; ty=gy; what=gs[i][1]; } }
+    }
+  }
+  if(tx===null){ os('我：指针在原地打转。',2.4); return; }
+  var a=Math.atan2(ty-S.y,tx-S.x), rel=((a-S.ang+PI*3)%TAU)-PI;
+  var dirs=['正前方','右前方','右边','右后方','正后方','左后方','左边','左前方'];
+  var k=Math.round(rel/(PI/4)); k=((k%8)+8)%8;
+  var m=Math.round(Math.sqrt(dist2(tx,ty,S.x,S.y))*U2M);
+  toast('罗盘 → '+dirs[k]+' · 约 '+m+' 米');
+  os('我：指针在抖，最后停在'+dirs[k]+'——'+what+'。',3.0);
 }
 function throwCoin(){
   if(S.mode!=='in'||S.room!=='garage1'){ os('我：扔在这儿没意义。',2); return; }
@@ -4991,13 +5862,15 @@ function dropSelected(){
   removeItem(id);
   os('我：我把「'+ITEMS[id].n+'」放下了。',2.4);
   if(S.mode==='in'&&inToiletHere()&&!RT.beastDrop){
-    if(S.tsec>=705&&S.tsec<=706&&S.room==='teach1'){
+    if(inBeastWindow()&&S.room==='teach1'){
       RT.beastDrop=true;
-      os('我：地砖缝里有个声音，接住了它。',4);
+      os('我：东西刚落地，就被地砖缝里的什么接住了。很轻的一声："嗯。" ——现在，去敲第三个隔间的门。',5);
       addClue('beast');
     }
   }
 }
+/* 《先辈》的时间窗：11:43–11:52。以前只有 11:45–11:46 一分钟（上课时流速下不到 1 秒），几乎不可能做到 */
+function inBeastWindow(){ return S.tsec>=703&&S.tsec<=712; }
 
 function addClue(id){
   if(!S.clues[id]) S.clues[id]=S.day;
@@ -5159,12 +6032,12 @@ function fnTick(dt){
     {label:'笑一下', fn:function(){
       UI.closeChoice(); f.v+=14;
       os('其实——'+e.real,4.6);
-      try{ toast('隐藏值 +14'); }catch(err){}
+      try{ toast('（你笑出了声）'); }catch(err){}
     }},
     {label:'不笑，装作没这回事', fn:function(){
       UI.closeChoice(); f.v+=5;
       os('其实——'+e.real,4.6);
-      try{ toast('隐藏值 +5'); }catch(err){}
+      try{ toast('（你忍住了）'); }catch(err){}
     }}
   ]);
 }
@@ -5179,9 +6052,9 @@ function chooseIdea(id){
       {label:'再想想',fn:function(){ UI.closeChoice(); }},
       {label:'就这么办',fn:function(){
         UI.closeChoice();
-        if(it.route==='trap_out') kill('你从那条缝里挤了出去。然后你从另一个校门走了进来，衣服上还有雨。','slit');
-        else if(it.route==='trap_wall') kill('你翻上了墙头。墙外面还有一道墙，再外面还有一道。你一直翻到天亮。','squeeze');
-        else kill('他停下来了。他转过头。然后他从墙里直接走了进来。','face');
+        if(it.route==='trap_out') kill('你从门缝里挤了出去。外面是一条很长的马路，路尽头有一扇校门。你走进去——衣服上还有雨，教学楼里，铃刚刚响。','slit');
+        else if(it.route==='trap_wall') kill('你翻上了墙头。墙外面还有一道墙。再外面，还有一道。你一直翻，翻到手指不再是手指的形状。','squeeze');
+        else kill('路过的那个人停了下来。他慢慢转过头——他没有脸，只有一个很大的、在笑的洞。然后他从墙里直接走了进来。','face');
       }}
     ]);
     return;
@@ -5211,8 +6084,7 @@ function useCar(cx,cy){
   },1900);
 }
 function tryFaceRoute(){
-  if(S.talent!=='code'){ os('我：闸机不认我。得有个人在后台把我加进去。',3.4); return; }
-  if(!RT.hacked){ os('我：得先去实验楼三楼的教师机，再回行政楼改数据。',3.8); return; }
+  if(!RT.hacked){ os('我：得先进实验楼三楼机房里那间锁着的网络中心，再去行政楼三楼改数据。',3.8); return; }
   if(!RT.data){ os('我：白名单还没改完。',2.6); return; }
   triggerEnding('face');
 }
@@ -5220,20 +6092,49 @@ function tryTrashRoute(){
   if(S.mode!=='in'||S.room!=='trash1'){ os('我：得先进垃圾房。',2.4); return; }
   var lo=1050,hi=1056;
   if(S.talent==='thin'){ lo=1048; hi=1058; }
+  addClue('trash');
   if(S.tsec>=lo&&S.tsec<=hi){ triggerEnding('trash'); return; }
-  kill('桶盖合上了。垃圾车没有来。有人在外面敲了两下。','deep');
+  /* 以前时间不对就直接死，而游戏里没有任何地方告诉你清运时间 */
+  if(isNight()){ kill('桶盖合上了。今晚垃圾车不会来。外面有人敲了两下，像在确认里面有没有人。','deep'); return; }
+  if(S.tsec>=lo-40&&S.tsec<lo){
+    UI.choice('桶盖内侧用记号笔写着：「清运 17:30」。离那时候还有 '+Math.round(lo-S.tsec)+' 分钟。',[
+      {label:'钻进去，等',fn:function(){
+        UI.closeChoice();
+        S.san=Math.max(1,S.san-12);
+        var mins=Math.round(lo-S.tsec)+1;
+        S.tsec=lo+1;
+        try{ timeSkipCard(mins,'在桶里等',S.tsec); }catch(e){}
+        setTimeout(function(){ if(!S.dead) triggerEnding('trash'); },900);
+      }},
+      {label:'先不了',fn:function(){ UI.closeChoice(); }}
+    ]);
+    return;
+  }
+  os('我：桶盖内侧用记号笔写着：「清运 17:30」。字是倒着写的，像是从里面写的。',4.4);
 }
 function tryBeastRoute(){
-  if(!RT.beastDrop){ os('我：我还没往那个缝里扔东西。',2.6); return; }
-  if(S.tsec>=705&&S.tsec<=706&&inToiletHere()){ triggerEnding('beast'); return; }
-  kill('门是被从外面撞开的。可是这次没有人跑出去。','twin');
+  if(!RT.beastDrop){ os('我：我还没往那条缝里放过东西。',2.6); return; }
+  if(inBeastWindow()&&inToiletHere()){ triggerEnding('beast'); return; }
+  if(!inBeastWindow()){ os('我：不是现在。隔间门上刻的时间是 11:45。',3.0); return; }
+  os('我：得在厕所里，第三个隔间门口。',2.6);
+}
+/* 隔间：门上刻着时间（《先辈》的提示），时间对了、东西放过了，敲门就是那条路 */
+function useStall(){
+  S.spots.stall=1; UI.spotsDirty=true;
+  if(RT.beastDrop&&inBeastWindow()&&S.room==='teach1'){ triggerEnding('beast'); return; }
+  addClue('stall');
+  if(S.room==='teach1'){
+    os('我：第三个隔间的门从里面锁着。门板上有人用指甲刻了一行：「11:45　放下一样东西　敲三下」。',5.2);
+  }else{
+    os('我：隔间的门在里面锁着。门缝底下很暗，暗得不像有地面。',3.4);
+  }
 }
 
 var DEATH_MESSAGES={};
 var DFX_EPI={
-  vignette:'', laugh:'你自己也觉得好笑。', gaze:'你终于看清了。', swarm:'它们很轻。',
+  laugh:'你自己也觉得好笑。', gaze:'你终于看清了。', swarm:'它们很轻。',
   water:'你没有挣扎。', shadow:'它等了你一整天。', hand:'那只手是温的。',
-  face:'它一直在等你先动。', ring:'圈合上了。', shatter:'你碎成了很多个自己。',
+  face:'它一直在等你先动。', ring:'圈合上了。正中那个位置，从此有人了。', shatter:'你碎成了很多个自己。每一个都在找回去的路。',
   grip:'好几只手。都很有耐心。', deep:'下面比你想的宽敞。', slit:'缝在你身后合上了。',
   follow:'你跟上得很好。', drown:'你听见有人在岸上喊你的名字。', voice:'你应了一声。',
   bell:'第十三下。', names:'他们等这个名字等了很久。', squeeze:'你比墙软。',
@@ -5241,7 +6142,7 @@ var DFX_EPI={
   chalk:'这一次写的是你的名字。', loop:'走廊没有尽头 —— 因为你一直在同一段里。',
   twin:'他转过来的时候，你正在转过去。', lamps:'灯停在你站的那一格上。',
   neck:'他根本没打算绕路。', mirror:'镜子里那个，先动的手。',
-  floor:'下面很宽敞。', wall:'你比墙软。'
+  floor:'下面很宽敞。还有很多张课桌。', wall:'你比墙软。', vignette:'有人替你应了一声"到"。'
 };
 var DFX_SFX={laugh:'crack',shatter:'crack',grip:'slam',squeeze:'slam',bell:'bell',
   deep:'crack',freeze:'blink',voice:'blink',names:'blink',slit:'door',default:'blink'};
@@ -5254,15 +6155,20 @@ function kill(msg,fx){
   var f=document.getElementById('flash');
   f.style.background='#1a0000'; f.style.opacity='0.9';
   setTimeout(function(){ f.style.opacity='0'; f.style.transition='opacity 1.2s'; },40);
-  GLR.hurt=1;
-  try{ var _sf=DFX_SFX[S.death]||DFX_SFX.default; if(SFX[_sf]) SFX[_sf](); else SFX.death(); }catch(e){ SFX.death(); }
+  GLR.hurt=0.45;                     /* 以前直接拉满，整屏一层粉，演出本身反而看不清 */
+  try{ if(SFX.deathFx) SFX.deathFx(S.death); else SFX.death(); }catch(e){ try{ SFX.death(); }catch(_e){} }
   var _ep=(DFX_EPI[S.death]||'');
-  var _hold=(S.death==='neck')?3000:((S.death==='grip'||S.death==='gaze'||S.death==='stare')?2600:1600);
-  setTimeout(function(){
+  var _hold=(S.death==='neck')?3000:((S.death==='grip'||S.death==='gaze'||S.death==='stare'||S.death==='ring'||S.death==='lamps'||S.death==='follow')?2600:2000);
+  /* 预知梦：第一天死掉，会在 11:40 的座位上惊醒（最多三次）。以前只有异象能"差点"，饿死、违规照样直接结束 */
+  var wake=(S.diff==='easy'&&S.day===1&&(RT.wakes||0)<3);
+  if(!wake) setTimeout(function(){
     var e2=document.getElementById('dieepi'); if(e2) e2.textContent=_ep;
   },_hold);
   os(msg,2.6);
+  var _deadId=S.deadId=(S.deadId||0)+1;
   setTimeout(function(){
+    if(S.deadId!==_deadId||!S.dead) return;
+    if(wake){ dreamWake(); return; }
     var el=document.getElementById('die');
     document.getElementById('diem').textContent=msg;
     el.style.display='flex';
@@ -5270,11 +6176,32 @@ function kill(msg,fx){
   },_hold);
 }
 
+function dreamWake(){
+  RT.wakes=(RT.wakes||0)+1;
+  var left=3-RT.wakes;
+  eyelid(700,function(){
+    try{ anfxClear(); }catch(e){}
+    AN.active=false; AN.id=null; AN.data={}; AN.t=0; AN.acc=0; AN.pre=null; AN.preNext=0; AN.locked=false;
+    AN.next=60;
+    S.dead=false; S.death=null; S.deadT=0; S.eyeLift=0; S.pitch=0;
+    S.tsec=700; S.san=78; S.viol=0; S.stam=100; S.tt=0; S.ttTier=0; S.hiddenLatch=false; S.hiddenAsked=false;
+    GLR.hurt=0; GLR.flash=0;
+    var f=document.getElementById('flash'); if(f){ f.style.transition='none'; f.style.opacity='0'; }
+    UI.closeChoice(); PAUSE.on=false; ROAM.on=false;
+    var R1=INTERIORS['teach1'];
+    doEnterRoom('teach1',{x:R1.ox+48.5*9, y:R1.oy+6.5*9, ang:-PI/2, seated:true});
+    try{ SFX.wake&&SFX.wake(); }catch(e){}
+  },function(){
+    os('……我猛地抬起头，后背全是汗。11:40。我还坐在自己的位子上。\n刚才那些——是梦吗？可我记得每一条走廊。',5.5);
+    toast(left>0?'预知梦 · 还能再醒 '+left+' 次':'预知梦 · 下一次，不会再醒了');
+  });
+}
+
 var ENDINGS={
-  car:  {t:'《闸 门》',  l:['你踩下油门的时候，雨刷自己在动。','后视镜里，教学楼一扇一扇地暗下去。','你没敢回头看副驾。']},
-  face: {t:'《白名单》', l:['闸机亮了一下绿光。','你走出去，回头看了一眼——','里面的天还是黑白的。']},
-  trash:{t:'《第三个桶》',l:['桶盖在头顶合上。','你听见垃圾车发动的声音。','有人在外面敲了两下桶壁。']},
-  beast:{t:'《先 辈》',  l:['门是被从外面撞开的。','你看清了那个背影——然后你跟着跑了出去。','整座学校第一次有了颜色。']}
+  car:  {t:'《闸 门》',  l:['你踩下油门的时候，雨刷自己动了起来。','后视镜里，教学楼的窗户一扇一扇地暗下去，像有人在挨个关灯。','开出校门很远，你才敢看一眼副驾。','那里放着一张学生证。照片上的人，你终于认得了。']},
+  face: {t:'《白名单》', l:['闸机「嘀」地亮了一下绿光。','你走出去，回头看了一眼——','里面的天还是黑白的。所有窗口后面都站着一个人，在目送你。','你的名字从那天起，一直留在白名单的最后一行。']},
+  trash:{t:'《第三个桶》',l:['桶盖在头顶合上。','黑暗里，你听见垃圾车发动的声音，越来越远，越来越颠。','车停了很久。有人在外面敲了两下桶壁。','是你自己的声音在问：「里面有人吗？」']},
+  beast:{t:'《先 辈》',  l:['门是被从外面撞开的。','你看清了那个背影——穿着很多年前的校服，一直在往外跑。','你跟着他跑了出去。','整座学校，第一次有了颜色。']}
 };
 function triggerEnding(id){
   RT.end=id;
@@ -5326,11 +6253,11 @@ var SAN_ACTS={
   run:   {n:'沿跑道跑两圈', san:14, min:12, cd:90,  msg:'我：跑完两圈。肺很疼，脑子清楚了一点。'},
   shoot: {n:'投几个球',     san:10, min:8,  cd:70,  msg:'我：球砸在框上，弹回来。声音很空。'},
   eat:   {n:'吃饭',         san:18, min:20, cd:140, msg:'我：饭是凉的。但我还是吃完了。'},
-  sleep: {n:'躺一会儿',     san:26, min:45, cd:200, msg:'我：我闭了一下眼睛。醒来的时候天还在。'},
+  sleep: {n:'躺一会儿',     san:26, min:45, cd:200, msg:'我：我闭了一下眼睛。醒来的时候，上铺的床板往下压着一个人的形状。'},
   wash:  {n:'洗把脸',       san:8,  min:4,  cd:50,  msg:'我：水很凉。镜子里那个人也洗了把脸。'},
   piano: {n:'弹一会儿琴',   san:16, min:10, cd:120, msg:'我：我弹了一段。走廊里没有人过来。'},
   pc:    {n:'玩一会儿电脑', san:12, min:15, cd:100, msg:'我：机房里只有我这一台亮着。屏幕右下角的时钟在走。'},
-  view:  {n:'看看远处',     san:6,  min:6,  cd:40,  msg:'我：从这里能看见半个校园。都在雾里。'}
+  view:  {n:'看看远处',     san:6,  min:6,  cd:40,  msg:'我：从这里能看见半个校园。都在雾里。雾的边上，一直是同一栋楼。'}
 };
 var FAC_CD={Z:70,C:90,N:45,Y:200,K:0};
 function facClock(){ return (S.day||1)*1440+S.tsec; }
@@ -5346,12 +6273,22 @@ function useFacility(ch,R){
   if(cool[key]&&facClock()<cool[key]){ os('我：刚弄过。等一会儿。',2.0); return true; }
   var rolled=false;
   if(ch==='Z'){
+    /* 物理实验室：单摆会"预报"下一次异象 —— 说出来的那个就是真的会来的那个 */
     rolled=true;
-    var v=facRoll(100);
-    if(v<30){ S.san=Math.min(100,S.san+10); os('我：杠杆正好平了。两边都停住不动。',3.4); toast('物理装置 · SAN +10'); }
-    else if(v<62){ S.san=Math.min(100,S.san+5); os('我：小球来回滚，每一次都停在同一条缝上。',3.4); toast('物理装置 · SAN +5'); }
-    else { S.san=Math.max(0,S.san-7); os('我：砝码自己滑下来了。没有声音。',3.4); toast('物理装置 · SAN −7'); }
-    S.tsec=((S.tsec+4)%1440+1440)%1440;
+    if(!AN.active&&AN.pre){
+      AN.locked=true;
+      var mins=Math.max(1,Math.round(AN.next*rateAt(S.tsec)/60));
+      os('我：我把摆拉开、松手。它没有来回摆，而是慢慢停在一个方向上，像被什么吸住了。\n秤盘上的砝码排成了几个字——「'+(AN_CN[AN.pre]||AN.pre)+'」。还有大约 '+mins+' 分钟。',6.5);
+      toast('预报：'+(AN_CN[AN.pre]||AN.pre));
+      addClue('pendulum');
+    }else if(AN.active){
+      S.san=Math.max(0,S.san-4);
+      os('我：摆在乱转，转得越来越快。它在说：已经来了。',3.6);
+    }else{
+      S.san=Math.min(100,S.san+5);
+      os('我：摆停在正中，一动不动。暂时什么也不会来。',3.4);
+    }
+    S.tsec=((S.tsec+3)%1440+1440)%1440;
   }else if(ch==='C'){
     rolled=true;
     var v2=facRoll(100);
@@ -5366,9 +6303,15 @@ function useFacility(ch,R){
     else { S.san=Math.max(0,S.san-4); os('我：镜片里有一只眼睛。它先眨了一下。',3.8); toast('显微镜 · SAN −4'); }
   }else if(ch==='Y'){
     rolled=true;
-    os('我：地球仪上的学校被人用铅笔画了一个圈。',3.4);
-    addClue('geo'); toast('几何 · 线索 +1');
-    S.san=Math.min(100,S.san+1);
+    addClue('geo');
+    if(!hasItem('compass')&&!RT.geoCompass){
+      RT.geoCompass=1;
+      os('我：地球仪上，学校的位置被铅笔描了很多遍，纸都描破了。底座的抽屉里有个罗盘。',4.6);
+      addItem('compass');
+    }else{
+      os('我：我转了一下地球仪。它转回来，停在原来那一面。',3.2);
+    }
+    S.san=Math.min(100,S.san+2);
   }else if(ch==='K'){
     if(R.host==='admin'){
       os('我：办公桌上摊着一叠表格。最上面那张的名字被涂掉了。',3.6);
@@ -5444,9 +6387,29 @@ function timeSkipCard(mins,actName,tsec){
     if(el) el.classList.remove('on');
   }, 760);
 }
+function nearRoster(){ return AN.active&&AN.id==='roster'&&AN.data&&!AN.data.done&&AN.data.rx!==undefined&&dist2(S.x,S.y,AN.data.rx,AN.data.ry)<80*80; }
+/* 被划掉的名单：以前没有任何办法"处理"它，16 秒后必扣 30 违规 */
+function useRoster(){
+  var d=AN.data;
+  if(hasItem('pen')||hasItem('chalk')){
+    d.done=true;
+    S.san=Math.min(100,S.san+6);
+    os('我：我在那道红线旁边，把自己的名字一笔一画重新写了一遍。写完以后，红线淡了。',4.4);
+    addClue('roster');
+    return;
+  }
+  UI.choice('名单上，我的名字被一道红线划掉了。手边没有笔。',[
+    {label:'把它撕下来',fn:function(){ UI.closeChoice(); d.done=true; S.viol=Math.min(100,S.viol+8); S.san=Math.max(0,S.san-5);
+      os('我：纸撕下来的时候，下面还贴着一张。一模一样，连那道红线都是新的。……至少我把它撕了。',4.6); }},
+    {label:'用指甲把名字刻回去',fn:function(){ UI.closeChoice(); d.done=true; S.san=Math.max(0,S.san-10);
+      os('我：指甲劈了。名字刻上去了，歪歪扭扭的，渗着一点红。',4.0); }},
+    {label:'不管它',fn:function(){ UI.closeChoice(); }}
+  ]);
+}
 function tryInteract(){
   if(S.screen!=='play'||S.dead||PAUSE.on||UI.anyOpen()) return;
   if(S.seated){ S.seated=false; os('我站了起来。',1.6); S.enterCool=0.4; return; }
+  if(nearRoster()){ useRoster(); return; }
 
   if(S.mode==='out'){
     var nb=nearWorld(0);
@@ -5456,18 +6419,18 @@ function tryInteract(){
         dormN:'dorm1',dormS:'dorm4',garage:'garage1',garw:'garage1',trash:'trash1',
         guard:'guard1',gear:'gear1',bell:'bell1'};
 
-      if(map[id]){ enterRoom(map[id]); return; }
+      if(map[id]){ ENTER_VIA='out'; try{ SFX.door(); }catch(e){} enterRoom(map[id]); return; }
       return;
     }
     var act=sanActFor(null,null);
     if(act){ doSanAct(act); return; }
     var gn=Math.sqrt(dist2(GATE_N.x*SC,GATE_N.y*SC,S.x,S.y));
-    if(gn<70){ os('我：北门的闸机不认我。',2.6); return; }
+    if(gn<70){ os('我：北门的闸机屏幕上显示：「查无此人」。门外的路上没有车，也没有声音，一直延伸到雾里。',4.2); addClue('gaten'); return; }
     var gw=Math.sqrt(dist2(GATE_W.x*SC,GATE_W.y*SC,S.x,S.y));
     if(gw<70){ tryGateWest(); return; }
     var gs=Math.sqrt(dist2(GATE_S.x*SC,GATE_S.y*SC,S.x,S.y));
-    if(gs<70){ os('我：南门这边什么也没有。',2.4); return; }
-    os('我：这里摸不到什么。',1.8);
+    if(gs<70){ os('我：南门锁着，锁上全是锈。门缝外面——是另一个南门。',3.4); return; }
+    os(pick(['我：这里摸不到什么。','我：……什么都没有。可我总觉得刚刚有东西在这儿。','我：地上很凉。']),1.8);
     return;
   }
 
@@ -5489,7 +6452,7 @@ function tryInteract(){
     }
     if(!OPENDOORS[doorKeyAt(R,hit.c,hit.r)]){
       OPENDOORS[doorKeyAt(R,hit.c,hit.r)]=1;
-      SFX.door(); os('我：门开了。',1.8); S.enterCool=0.35;
+      SFX.door(); os(pick(['我：门开了。','我：门开了。合页的声音拖得很长。','我：门开了。里面比外面冷。']),1.8); S.enterCool=0.35;
       enterWorldRoom(S.room);
     }else{
       os('我：门开着。',1.4);
@@ -5503,10 +6466,14 @@ function tryInteract(){
   if(ch==='S'){ stairGo(); return; }
   if(ch==='L'){ useLink(R,hit.c,hit.r); return; }
   if(ch==='Q'){
-    os('我：服务器还在跑。风扇声很大，指示灯一排一排地闪。',3.6);
+    os('我：服务器在响，像很多人一起压着嗓子呼气。屏幕上滚着门禁记录——每一行的时间都是 11:40。',4.6);
     addClue('server');
     return;
   }
+  if(ch==='q'){ searchContainer(hit.c,hit.r); return; }
+  if(ch==='x'){ useGeoMap(); return; }
+  if(ch==='U'){ useBell(); return; }
+  if(ch==='A'){ useAltar(); return; }
   if(ch==='P'){ sitDown(); return; }
   if(ch==='d'||ch==='f'||ch==='R'){ searchContainer(hit.c,hit.r); return; }
   if(ch==='T'){
@@ -5542,11 +6509,46 @@ function tryInteract(){
     os('我：柜台下面没有别的了。',2.0); return;
   }
   if(ch==='t'||ch==='k'){ os('我：没有能吃的。',2.0); return; }
-  if(ch==='B'||ch==='G'){ os('我：隔间的门在里面锁着。',2.2); return; }
+  if(ch==='B'||ch==='G'){ useStall(); return; }
   if(ch==='w'){ S.san=Math.min(100,S.san+4); os('我：洗了把脸。',2.2); return; }
   os('我：用不上。',1.8);
 }
 
+/* 地理实验室的挂图：每张会圈出一个你还没去过的地方 */
+function useGeoMap(){
+  RT.geoMaps=RT.geoMaps||0;
+  var left=[], i;
+  for(i=0;i<SPOTS.length;i++) if(!S.spots[SPOTS[i].id]) left.push(SPOTS[i]);
+  if(!left.length||RT.geoMaps>=4){ os('我：挂图上的路我都走过了。有一条是我没见过的——它通到围墙外面，然后被撕掉了。',4.2); return; }
+  var sp=left[Math.floor(Math.random()*left.length)];
+  RT.geoMaps++;
+  S.spots[sp.id]=1; UI.spotsDirty=true;
+  os('我：挂图是很多年前的校园平面图。有一处被红笔圈了好几圈，旁边写着「'+sp.n+'」。',4.6);
+  toast('记下了：'+sp.n);
+}
+function useBell(){
+  if(AN.active&&AN.id==='bell13'){
+    os('我：我抱住撞木，用力撞了一下。钟声和那第十三下撞在一起——两边都没了。',4.6);
+    S.san=Math.min(100,S.san+8);
+    try{ SFX.bigBell&&SFX.bigBell(); }catch(e){}
+    anEnd(); return;
+  }
+  S.san=Math.max(0,S.san-3);
+  addClue('bell');
+  try{ SFX.bigBell&&SFX.bigBell(0.3); }catch(e){}
+  os('我：我推了一下撞木。钟没响。……过了很久，教学楼那边响了一下。',4.2);
+}
+function useAltar(){
+  addClue('altar');
+  if(!RT.altarCoin){
+    RT.altarCoin=1;
+    os('我：供桌上的饭还冒着气，筷子竖插在正中。照片上那张脸被剪掉了，校服是我们学校的。香炉底下压着一枚硬币。',5.6);
+    addItem('coin');
+    return;
+  }
+  S.san=Math.max(0,S.san-2);
+  os('我：照片里那个人的手，好像比刚才抬高了一点。',3.2);
+}
 function hit2_seatNear(R){
   if(!R) return false;
   var c=Math.floor((S.x-R.ox)/R.tw), r=Math.floor((S.y-R.oy)/R.th);
@@ -5617,21 +6619,34 @@ function linksOf(host){
     south:{id:'teach2',c:2, r:18}
   };
 }
+/* 楼梯：能上能下。以前行政楼 / 实验楼只能往上（顶层原地不动），南宿舍的楼梯直接把人送出楼外 */
+function floorIdOf(host,f){
+  if(host==='teach') return 'teach'+f;
+  if(host==='admin') return 'admin'+f;
+  if(host==='lab') return 'lab'+f;
+  if(host==='dormN') return 'dorm'+f;
+  if(host==='dormS') return 'dorm'+(f+3);
+  return null;
+}
+function topFloorOf(host){ return host==='teach'?6:(host==='admin'||host==='lab')?5:(host==='dormN'||host==='dormS')?3:1; }
 function stairGo(){
   var R=INTERIORS[S.room];
   if(!R){ exitRoom(); return; }
-  var f=R.floor, host=R.host;
-  if(host==='teach'){
-    if(f===6){ enterRoom('teach5'); return; }          /* 天台往下 */
-    if(f===5){ enterRoom('teach6'); return; }          /* 五楼往上 = 天台，以前这里是往下走 */
-    if(f===1){ exitRoom(); return; }
-    if(f<5&&R.floor<6){ enterRoom('teach'+(f+1)); return; }
-    enterRoom('teach'+(f-1));
+  var f=R.floor, host=R.host, top=topFloorOf(host);
+  if(top<=1){ exitRoom(); return; }
+  var up=(f<top)?floorIdOf(host,f+1):null, dn=(f>1)?floorIdOf(host,f-1):null;
+  function upLabel(){ return (host==='teach'&&f+1===6)?'上天台':'上楼（'+(f+1)+'F）'; }
+  if(up&&dn){
+    UI.choice('楼梯间里很安静。扶手是凉的。',[
+      {label:upLabel(),fn:function(){ UI.closeChoice(); SFX.stairs&&SFX.stairs(); ENTER_VIA='stair'; enterRoom(up); }},
+      {label:'下楼（'+(f-1)+'F）',fn:function(){ UI.closeChoice(); SFX.stairs&&SFX.stairs(); ENTER_VIA='stair'; enterRoom(dn); }},
+      {label:'算了',fn:function(){ UI.closeChoice(); }}
+    ]);
     return;
   }
-  if(host==='admin'){ enterRoom('admin'+clamp(f+1,1,5)); return; }
-  if(host==='lab'){ enterRoom('lab'+clamp(f+1,1,5)); return; }
-  if(host==='dormN'){ enterRoom('dorm'+clamp(f%6+1,1,6)); return; }
+  try{ SFX.stairs&&SFX.stairs(); }catch(e){}
+  if(up){ ENTER_VIA='stair'; enterRoom(up); return; }
+  if(dn){ ENTER_VIA='stair'; enterRoom(dn); return; }
   exitRoom();
 }
 function labLoot(floor){
@@ -5652,6 +6667,10 @@ function searchContainer(c,r){
   if(RT.deskUsed[key]){ os('我：翻过了。',1.6); return; }
   RT.deskUsed[key]=1;
   var _R=INTERIORS[S.room];
+  if(S.room==='lab3'&&_R&&_R.grid[r]&&_R.grid[r][c]==='R'&&!hasItem('usb')){
+    os('我：货架最上层有个文件盒，里面躺着一个 U 盘。标签上写着「门禁」。',3.6);
+    addItem('usb'); return;
+  }
   if(_R&&_R.host==='lab'){
     var lv=labLoot(_R.floor);
     if(lv) addItem(lv); else os('我：空的。抽屉里只有一层灰。',2.0);
@@ -5677,29 +6696,37 @@ function searchContainer(c,r){
     RT.hwTaken=true; give='hw';
   }
   if(give) addItem(give);
-  else os('我：空的。只有一层灰。',2.0);
+  else os(pick(['我：空的。只有一层灰。','我：空的。抽屉底下用圆珠笔写着一个名字，被涂黑了。','我：空的。最里面有一小撮头发。']),2.4);
 }
 function useTerminal(){
   if(S.room!=='lab3'){ os('我：这台终端连不上。',2.2); return; }
-  if(S.talent!=='code'){ os('我：屏幕上是我不认识的东西。',2.6); return; }
-  if(RT.hacked){ os('我：已经进去了。',2.0); return; }
+  if(RT.hacked){ os('我：白名单里已经有我那一行了。光标还在闪，像在等我再写点什么。',3.2); return; }
+  /* 以前只有随机到「编程社」天赋才走得通；现在网络中心货架上的 U 盘也能做到 */
+  if(S.talent!=='code'&&!hasItem('usb')){
+    os('我：屏幕上是一串我看不懂的东西。旁边贴着一张便签：「门禁 U 盘插这里」。',4.0);
+    addClue('usb');
+    return;
+  }
   RT.hacked=true;
   addClue('comp');
-  os('我：我在白名单里加了一行。是我自己的学号。',4.4);
+  if(S.talent==='code') os('我：我打开门禁后台，在白名单最后加了一行——我自己的学号。回车的时候，整排机柜同时闪了一下。',5);
+  else os('我：U 盘插进去，屏幕自己跳出一个窗口，光标在最后一行闪。我输了自己的学号。机柜同时闪了一下。',5);
+  os2later('我：还得去行政楼三楼，把数据同步过去。',5200);
 }
+function os2later(msg,ms){ setTimeout(function(){ if(!S.dead&&S.screen==='play') os(msg,3.6); },ms); }
 function useTrash(){
   if(S.room!=='trash1'){ os('我：这个桶太小了。',2.2); return; }
   tryTrashRoute();
 }
 function useData(){
   if(S.room!=='admin3'){ os('我：这台机器不归我管。',2.2); return; }
-  if(!RT.hacked){ os('我：它要我输入一个我不该知道的东西。',2.8); return; }
+  if(!RT.hacked){ os('我：它要我输入一个我不该知道的东西。屏幕右下角写着：数据源 · 实验楼 3F 网络中心。',3.8); return; }
+  if(RT.data){ os('我：已经同步过了。',2.0); return; }
   RT.data=true;
-  os('我：数据改完了。闸机会亮绿灯。',4);
+  os('我：进度条走完了。屏幕上弹出一张照片——是我。照片底下写着：已登记。西小门的闸机，现在认得我了。',5.2);
 }
 function tryGateWest(){
-  if(S.talent!=='code'){ os('我：闸机不认我。',2.6); return; }
-  if(!RT.hacked||!RT.data){ os('我：白名单还没改完。',2.6); return; }
+  if(!RT.hacked||!RT.data){ os('我：小门上挂着锁，旁边那台闸机的屏幕亮着：「未登记」。',3.0); addClue('gatew'); return; }
   triggerEnding('face');
 }
 
@@ -5849,8 +6876,18 @@ UI.renderNote=function(){
   h+='<h2 style="font-size:15px;letter-spacing:3px;color:#9fe3c2;font-weight:400;margin:24px 0 12px">注意到的事</h2>';
   var any=false;
   for(var k in S.spots){ h+='<div style="font-size:13px;padding:4px 0;opacity:.7">· '+kLabel(k)+'</div>'; any=true; }
-  if(typeof hasClue==='function'&&hasClue('roomkey')){
-    h+='<div style="font-size:13px;padding:4px 0;opacity:.7">· 机房的门锁着 —— 钥匙应该在保安室。</div>'; any=true;
+  var CLUE_NOTE=[
+    ['roomkey','网络中心的门锁着 —— 钥匙应该在保安室。'],
+    ['stall','教学楼一楼厕所，第三个隔间：「11:45　放下一样东西　敲三下」。'],
+    ['trash','垃圾房的桶盖上写着：清运 17:30。'],
+    ['usb','门禁终端要插 U 盘。U 盘大概还在网络中心里。'],
+    ['comp','白名单里已经有我了。还差行政楼三楼那一步。'],
+    ['gatew','西小门的闸机只认白名单。'],
+    ['pendulum','物理实验室的单摆，能"预报"下一次。'],
+    ['bell','钟楼的钟是哑的。可它和十三下钟声有关系。']
+  ], ci;
+  for(ci=0;ci<CLUE_NOTE.length;ci++){
+    if(typeof hasClue==='function'&&hasClue(CLUE_NOTE[ci][0])){ h+='<div style="font-size:13px;padding:4px 0;opacity:.7">· '+CLUE_NOTE[ci][1]+'</div>'; any=true; }
   }
   if(!any) h+='<div style="font-size:13px;opacity:.4">（还没注意到什么。）</div>';
   if(!hasItem('notebook')||!hasItem('pen')) h+='<div style="font-size:12px;opacity:.55;margin-top:20px">我：感觉头不舒服，很多东西都容易忘了。</div>';
@@ -5891,6 +6928,8 @@ UI.renderMap=function(){
   function Y(v){ return (v-BOUND.y0)*sc; }
   c.strokeStyle='rgba(120,180,150,.35)'; c.lineWidth=2;
   c.strokeRect(X(BOUND.x0),Y(BOUND.y0),bw*sc,bh*sc);
+  c.fillStyle='rgba(150,160,150,.16)';
+  for(var ri=0;ri<ROADS.length;ri++){ var rd=ROADS[ri]; c.fillRect(X(rd[0]),Y(rd[1]),(rd[2]-rd[0])*sc,(rd[3]-rd[1])*sc); }
   for(var i=0;i<OBJ.length;i++){
     var o=OBJ[i];
     c.fillStyle=o.k==='roof'?'#1c2a30':(o.k==='field'?'#16241b':(o.k==='court'?'#1a2427':(o.k==='garden'?'#17251e':'#182420')));
@@ -5902,7 +6941,7 @@ UI.renderMap=function(){
       c.fillText(o.n,X(o.x)+3,Y(o.y)+12);
     }
   }
-  var gates=[['北门',GATE_N],['西门',GATE_W],['南门',GATE_S]];
+  var gates=[['北门',GATE_N],['西小门',GATE_W],['南门',GATE_S]];
   c.fillStyle='#c8a24a'; c.font='11px monospace';
   for(i=0;i<gates.length;i++){
     c.fillRect(X(gates[i][1].x)-2,Y(gates[i][1].y)-2,4,4);
@@ -5915,113 +6954,319 @@ UI.renderMap=function(){
   c.beginPath(); c.moveTo(px,py);
   c.lineTo(px+Math.cos(S.ang)*16,py+Math.sin(S.ang)*16); c.stroke();
 };
+/* ================= 声音 =================
+   全部用 Web Audio 现场合成，不加载任何文件（单文件、离线可玩）。
+   master ─┬─ 直达
+           └─ 混响（生成的冲激响应）
+   持续层：低音铺底（BGM）· 室外风 / 夜里虫鸣 · 室内灯管嗡声 · 车库滴水 · 雨 · 心跳
+   一次性：脚步（分室内外）、门、楼梯、拾取、铃、每种异象 / 死亡各自的声音、远处的怪声 */
 var SFX=(function(){
   var ac=null,ready=false;
   function ensure(){
     if(ready) return ac;
-    try{
-      ac=new (window.AudioContext||window.webkitAudioContext)();
-      ready=true;
-    }catch(e){ ready=false; }
+    try{ ac=new (window.AudioContext||window.webkitAudioContext)(); ready=true; }catch(e){ ready=false; }
     return ac;
   }
-  var mg=null, vol=0.7, ambNodes=null;
+  var mg=null, vol=0.7, rev=null, revIn=null, NB=null, L=null, bgOn=false;
+  function ctx(){ if(!ready) ensure(); if(ac&&ac.state==='suspended'){ try{ac.resume();}catch(e){} } return ac; }
   function master(){
     var a=ctx(); if(!a) return null;
-    if(!mg){ try{ mg=a.createGain(); mg.gain.value=vol; mg.connect(a.destination); }catch(e){ return a.destination; } }
+    if(!mg){
+      try{
+        var comp=a.createDynamicsCompressor();
+        comp.threshold.value=-18; comp.ratio.value=4; comp.attack.value=0.004; comp.release.value=0.25;
+        comp.connect(a.destination);
+        mg=a.createGain(); mg.gain.value=vol; mg.connect(comp);
+        /* 混响：2.8 秒衰减的噪声做冲激 */
+        rev=a.createConvolver();
+        var len=Math.floor(a.sampleRate*2.8), ib=a.createBuffer(2,len,a.sampleRate), ch, i;
+        for(ch=0;ch<2;ch++){ var dd=ib.getChannelData(ch); for(i=0;i<len;i++) dd[i]=(Math.random()*2-1)*Math.pow(1-i/len,2.6); }
+        rev.buffer=ib;
+        revIn=a.createGain(); revIn.gain.value=0.9;
+        revIn.connect(rev); rev.connect(mg);
+      }catch(e){ return a.destination; }
+    }
     return mg;
   }
-  function ctx(){ if(!ready) ensure(); if(ac&&ac.state==='suspended'){ try{ac.resume();}catch(e){} } return ac; }
-  function tone(freq,dur,type,gain,slide){
-    var a=ctx(); if(!a) return;
-    var o=a.createOscillator(), g=a.createGain();
-    o.type=type||'sine'; o.frequency.value=freq;
-    if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(20,slide),a.currentTime+dur);
-    g.gain.value=gain||0.06;
-    g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur);
-    o.connect(g); var _d=master(); if(_d) g.connect(_d);
-    o.start(); o.stop(a.currentTime+dur);
+  function out(wet){                      /* 返回一个接入点：直达 + 一点混响 */
+    var a=ctx(); if(!a) return null;
+    var d=master(); if(!d) return null;
+    var g=a.createGain(); g.gain.value=1; g.connect(d);
+    if(wet&&revIn){ var w=a.createGain(); w.gain.value=wet; g.connect(w); w.connect(revIn); }
+    return g;
   }
-  function noise(dur,gain,filterFreq){
-    var a=ctx(); if(!a) return;
-    var n=a.sampleRate*dur, buf=a.createBuffer(1,Math.max(1,n),a.sampleRate), d=buf.getChannelData(0);
-    for(var i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*0.9;
-    var s=a.createBufferSource(); s.buffer=buf;
-    var f=a.createBiquadFilter(); f.type='lowpass'; f.frequency.value=filterFreq||900;
-    var g=a.createGain(); g.gain.value=gain||0.05;
-    g.gain.exponentialRampToValueAtTime(0.0001,a.currentTime+dur);
-    s.connect(f); f.connect(g); var _d=master(); if(_d) g.connect(_d);
-    s.start(); s.stop(a.currentTime+dur);
+  function noiseBuf(){
+    var a=ctx(); if(!a) return null;
+    if(!NB){
+      var n=a.sampleRate*2; NB=a.createBuffer(1,n,a.sampleRate);
+      var d=NB.getChannelData(0); for(var i=0;i<n;i++) d[i]=Math.random()*2-1;
+    }
+    return NB;
   }
-  function note(freq, at, dur, gain, type){
+  function tone(freq,dur,type,gain,slide,at,wet){
     var a=ctx(); if(!a) return;
-    var o=a.createOscillator(), g=a.createGain();
-    o.type=type||'sine'; o.frequency.value=freq;
-    var t0=a.currentTime+at;
+    var o=a.createOscillator(), g=a.createGain(), t0=a.currentTime+(at||0);
+    o.type=type||'sine'; o.frequency.setValueAtTime(freq,t0);
+    if(slide) o.frequency.exponentialRampToValueAtTime(Math.max(20,slide),t0+dur);
     g.gain.setValueAtTime(0.0001,t0);
-    g.gain.exponentialRampToValueAtTime(gain||0.05,t0+0.02);
+    g.gain.exponentialRampToValueAtTime(gain||0.06,t0+Math.min(0.02,dur*0.2));
     g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
-    o.connect(g); var _d=master(); if(_d) g.connect(_d);
+    o.connect(g); var _d=out(wet||0); if(_d) g.connect(_d);
     o.start(t0); o.stop(t0+dur+0.05);
   }
+  function noise(dur,gain,filterFreq,at,type,q,wet,attack){
+    var a=ctx(); if(!a) return;
+    var b=noiseBuf(); if(!b) return;
+    var s=a.createBufferSource(); s.buffer=b; s.loop=true;
+    var t0=a.currentTime+(at||0);
+    var f=a.createBiquadFilter(); f.type=type||'lowpass'; f.frequency.value=filterFreq||900; if(q) f.Q.value=q;
+    var g=a.createGain();
+    g.gain.setValueAtTime(0.0001,t0);
+    g.gain.exponentialRampToValueAtTime(gain||0.05,t0+(attack||0.008));
+    g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    s.connect(f); f.connect(g); var _d=out(wet||0); if(_d) g.connect(_d);
+    s.start(t0,Math.random()*1.5); s.stop(t0+dur+0.05);
+  }
+  function note(freq, at, dur, gain, type, wet){ tone(freq,dur,type,gain,0,at,wet); }
+  /* 铜钟：非整数倍泛音 */
+  function bellHit(f0,gain,at,wet){
+    var parts=[[0.5,1.0],[1.0,0.7],[1.19,0.45],[1.56,0.3],[2.0,0.35],[2.74,0.18],[3.76,0.1]];
+    for(var i=0;i<parts.length;i++) tone(f0*parts[i][0],4.2-i*0.4,'sine',gain*parts[i][1],0,at||0,wet===undefined?0.5:wet);
+  }
+  /* 像人声的元音：锯齿过两个带通 */
+  function vowel(f0,dur,gain,at,fm1,fm2,vib){
+    var a=ctx(); if(!a) return;
+    var t0=a.currentTime+(at||0);
+    var o=a.createOscillator(); o.type='sawtooth'; o.frequency.value=f0;
+    var lfo=a.createOscillator(), lg=a.createGain(); lfo.frequency.value=5.2; lg.gain.value=vib||f0*0.02;
+    lfo.connect(lg); lg.connect(o.frequency);
+    var g=a.createGain(); g.gain.setValueAtTime(0.0001,t0); g.gain.exponentialRampToValueAtTime(gain,t0+dur*0.3); g.gain.exponentialRampToValueAtTime(0.0001,t0+dur);
+    var d=out(0.6); if(!d) return;
+    [fm1||700,fm2||1150].forEach(function(fq){ var f=a.createBiquadFilter(); f.type='bandpass'; f.frequency.value=fq; f.Q.value=7; o.connect(f); f.connect(g); });
+    g.connect(d);
+    o.start(t0); lfo.start(t0); o.stop(t0+dur+0.1); lfo.stop(t0+dur+0.1);
+  }
   function moonlight(){
-    var arp=[207.65, 277.18, 329.63];                    /* G#3 C#4 E4 */
+    var arp=[207.65, 277.18, 329.63];
     var bass=[69.30, 103.83, 92.50, 103.83, 69.30, 92.50];
-    var mel=[415.30, 466.16, 523.25, 466.16, 415.30, 369.99,
-             415.30, 466.16, 523.25, 622.25, 554.37, 466.16];
+    var mel=[415.30, 466.16, 523.25, 466.16, 415.30, 369.99, 415.30, 466.16, 523.25, 622.25, 554.37, 466.16];
     var step=0.155, t=0, bar, i, r;
     for(bar=0;bar<24;bar++){
       var bf=bass[bar%bass.length];
-      note(bf, t, 3.0, 0.052, 'sine');
-      note(bf*2, t, 2.4, 0.026, 'triangle');
-      for(i=0;i<3;i++){
-        for(r=0;r<3;r++){
-          note(arp[(i+r)%3], t+(i*3+r)*step, 1.0, 0.034, 'sine');
-        }
-      }
+      note(bf, t, 3.0, 0.052, 'sine',0.3);
+      note(bf*2, t, 2.4, 0.026, 'triangle',0.3);
+      for(i=0;i<3;i++) for(r=0;r<3;r++) note(arp[(i+r)%3], t+(i*3+r)*step, 1.0, 0.034, 'sine',0.35);
       if(bar>=4){
-        note(mel[(bar-4)%mel.length], t+0.20, 1.9, 0.040, 'sine');
-        if(bar%4===2) note(mel[((bar-4)%mel.length+3)%mel.length], t+1.6, 1.5, 0.032, 'sine');
+        note(mel[(bar-4)%mel.length], t+0.20, 1.9, 0.040, 'sine',0.4);
+        if(bar%4===2) note(mel[((bar-4)%mel.length+3)%mel.length], t+1.6, 1.5, 0.032, 'sine',0.4);
       }
       t += 9*step;
     }
   }
+
+  /* ---------- 持续层 ---------- */
+  function loopNoise(type,freq,q){
+    var a=ctx(), s=a.createBufferSource(); s.buffer=noiseBuf(); s.loop=true;
+    var f=a.createBiquadFilter(); f.type=type; f.frequency.value=freq; if(q) f.Q.value=q;
+    var g=a.createGain(); g.gain.value=0;
+    s.connect(f); f.connect(g); s.start(0,Math.random());
+    return {s:s,f:f,g:g};
+  }
+  function buildLayers(){
+    var a=ctx(); if(!a||L) return;
+    var d=master(); if(!d) return;
+    L={};
+    /* BGM 铺底：三根略微走音的振荡器 + 低通，截止频率随紧张度走 */
+    L.padF=a.createBiquadFilter(); L.padF.type='lowpass'; L.padF.frequency.value=260; L.padF.Q.value=4;
+    L.padG=a.createGain(); L.padG.gain.value=0;
+    L.padF.connect(L.padG); L.padG.connect(d);
+    var wv=a.createGain(); wv.gain.value=0.35; L.padG.connect(wv); if(revIn) wv.connect(revIn);
+    L.osc=[];
+    [[55,'sawtooth',0],[82.4,'triangle',4],[55.6,'sawtooth',-6],[110,'sine',2]].forEach(function(p){
+      var o=a.createOscillator(); o.type=p[1]; o.frequency.value=p[0]; o.detune.value=p[2];
+      var og=a.createGain(); og.gain.value=p[1]==='sine'?0.5:0.33; o.connect(og); og.connect(L.padF); o.start();
+      L.osc.push(o);
+    });
+    L.lfo=a.createOscillator(); L.lfo.frequency.value=0.07; var lg=a.createGain(); lg.gain.value=90;
+    L.lfo.connect(lg); lg.connect(L.padF.frequency); L.lfo.start();
+    /* 紧张层：小二度的高音簇，颤 */
+    L.tenG=a.createGain(); L.tenG.gain.value=0; L.tenG.connect(d);
+    var tw=a.createGain(); tw.gain.value=0.5; L.tenG.connect(tw); if(revIn) tw.connect(revIn);
+    L.ten=[];
+    [880,932.3,1396.9].forEach(function(f){ var o=a.createOscillator(); o.type='sine'; o.frequency.value=f; var og=a.createGain(); og.gain.value=0.33; o.connect(og); og.connect(L.tenG); o.start(); L.ten.push(o); });
+    L.trem=a.createOscillator(); L.trem.frequency.value=6.5; var tg=a.createGain(); tg.gain.value=0.5;
+    L.tremG=a.createGain(); L.tremG.gain.value=0.5; L.trem.connect(tg); tg.connect(L.tremG.gain);
+    /* 风 / 雨 / 嗡声 / 车库低频 */
+    L.wind=loopNoise('bandpass',420,0.7); L.wind.g.connect(d);
+    L.windLfo=a.createOscillator(); L.windLfo.frequency.value=0.11; var wl=a.createGain(); wl.gain.value=180;
+    L.windLfo.connect(wl); wl.connect(L.wind.f.frequency); L.windLfo.start();
+    L.rain=loopNoise('lowpass',3600,0.4); L.rain.g.connect(d);
+    L.rain2=loopNoise('highpass',5200,0.3); L.rain2.g.connect(d);
+    L.humG=a.createGain(); L.humG.gain.value=0; L.humG.connect(d);
+    [100,200,300].forEach(function(f,i){ var o=a.createOscillator(); o.type=i===1?'square':'sine'; o.frequency.value=f; var og=a.createGain(); og.gain.value=[0.5,0.06,0.15][i]; o.connect(og); og.connect(L.humG); o.start(); });
+    L.rumble=loopNoise('lowpass',90,1.0); L.rumble.g.connect(d);
+    L.t=0; L.nextMel=4; L.nextStinger=30; L.nextCricket=1; L.nextDrip=1; L.nextBeat=1; L.lastPeriod=null; L.nextThunder=6;
+  }
+  function setG(param,v,tc){ try{ param.setTargetAtTime(v,ac.currentTime,tc||0.6); }catch(e){} }
+  var MEL=[[220,261.6,293.7,311.1,392,440,523.3],[207.7,246.9,277.2,311.1,370,415.3,493.9]];
+  /* 远处的怪声：随机挑一种 */
+  function stinger(){
+    var k=Math.floor(Math.random()*6), i;
+    if(k===0){ for(i=0;i<3;i++) noise(0.09,0.06,260,i*0.32,'lowpass',2,0.7); }                     /* 三下敲门 */
+    else if(k===1){ for(i=0;i<6;i++) noise(0.3,0.012,1800+Math.random()*900,i*0.18,'bandpass',6,0.8,0.12); } /* 低语 */
+    else if(k===2){ for(i=0;i<5;i++) noise(0.12,0.03,380,i*0.52,'lowpass',1,0.6); }                 /* 背后有脚步 */
+    else if(k===3){ noise(0.5,0.08,180,0,'lowpass',1,0.8); tone(70,0.6,'sine',0.06,40,0,0.6); }      /* 远处一扇门被摔上 */
+    else if(k===4){ tone(1240,2.2,'sine',0.010,1180,0,0.9); tone(1310,2.2,'sine',0.008,1250,0.1,0.9); } /* 耳鸣 */
+    else { vowel(240,1.6,0.012,0,500,900,8); }                                                     /* 一声很远的"啊——" */
+  }
+  function tick(dt){
+    var a=ctx(); if(!a||!L) return;
+    L.t+=dt;
+    var play=(typeof S!=='undefined'&&S.screen==='play');
+    var on=play&&(typeof AMB_ON==='undefined'||AMB_ON)&&!S.dead;
+    var out_=play&&S.mode==='out', night=1;
+    try{ night=1-sunAt(hourNow()).day; }catch(e){}
+    var anomaly=(typeof AN!=='undefined'&&AN.active), id=anomaly?AN.id:null;
+    var san=play?clamp(S.san,0,100):100;
+    var tension=clamp((anomaly?0.55:0)+(100-san)/160+(S.viol||0)/220,0,1);
+    var garage=play&&S.mode==='in'&&S.room==='garage1';
+    /* 铺底 */
+    setG(L.padG.gain,on?0.045+0.05*tension:0,1.2);
+    setG(L.padF.frequency,on?(180+tension*700+(out_?0:-40)):200,1.5);
+    var root=garage?41.2:(out_?(night>0.5?49:55):46.25);
+    L.osc[0].frequency.setTargetAtTime(root,a.currentTime,2);
+    L.osc[1].frequency.setTargetAtTime(root*1.5*(tension>0.6?0.944:1),a.currentTime,2);   /* 紧张时五度降成三全音 */
+    L.osc[2].frequency.setTargetAtTime(root*1.01,a.currentTime,2);
+    L.osc[3].frequency.setTargetAtTime(root*2,a.currentTime,2);
+    setG(L.tenG.gain,on?Math.max(0,tension-0.45)*0.05:0,0.8);
+    /* 环境 */
+    var rainOn=on&&anomaly&&(id==='rain'||id==='raindots');
+    var cover=rainOn&&S.mode==='in';
+    setG(L.wind.g.gain,on&&out_?0.020+0.012*night+(rainOn?0.02:0):(on&&S.room==='teach6'?0.03:0),1.0);
+    setG(L.rain.g.gain,rainOn?(cover?0.03:0.11):0,0.6);
+    setG(L.rain2.g.gain,rainOn?(cover?0.005:0.035):0,0.6);
+    setG(L.humG.gain,on&&S.mode==='in'&&!garage&&S.room!=='bell1'&&S.room!=='teach6'?0.010+0.006*Math.abs(Math.sin(L.t*0.7)):0,0.5);
+    setG(L.rumble.g.gain,on&&garage?0.09:(on&&id==='shifting'?0.12:0),0.8);
+    if(!on) return;
+    /* 八音盒一样的旋律：稀疏、不成调 */
+    L.nextMel-=dt;
+    if(L.nextMel<=0){
+      L.nextMel=rnd(5,11)*(1-tension*0.4);
+      var sc=MEL[tension>0.5?1:0], n=1+Math.floor(Math.random()*3), j;
+      for(j=0;j<n;j++){ var f=sc[Math.floor(Math.random()*sc.length)]*(Math.random()<0.3?2:1); note(f,j*rnd(0.35,0.7),2.6,0.016,'triangle',0.8); }
+    }
+    /* 夜里室外：虫鸣，偶尔整片同时停下 */
+    if(out_&&night>0.6&&!rainOn){
+      L.nextCricket-=dt;
+      if(L.nextCricket<=0){
+        L.nextCricket=rnd(0.25,1.1);
+        if(Math.sin(L.t*0.05)>-0.7){ var cf=rnd(4200,5200); for(var c=0;c<3;c++) tone(cf,0.035,'sine',0.006,cf*0.98,c*0.06); }
+      }
+    }
+    if(garage){ L.nextDrip-=dt; if(L.nextDrip<=0){ L.nextDrip=rnd(0.8,3.0); tone(rnd(900,1500),0.12,'sine',0.03,400,0,0.8); } }
+    if(id==='leak'){ L.nextDrip-=dt; if(L.nextDrip<=0){ L.nextDrip=rnd(0.3,0.8); tone(rnd(700,1300),0.10,'sine',0.04,300,0,0.6); } }
+    if(rainOn&&!cover){ L.nextThunder-=dt; if(L.nextThunder<=0){ L.nextThunder=rnd(7,14); noise(2.6,0.14,160,0,'lowpass',0.8,0.6,0.05); noise(0.25,0.08,900,0,'lowpass'); } }
+    if(id==='chalk'&&Math.random()<dt*3) noise(rnd(0.08,0.2),0.015,3200,0,'bandpass',4);
+    if(id==='lamps'&&Math.random()<dt*1.2){ noise(0.04,0.04,4000,0,'highpass'); tone(120,0.25,'square',0.012,118); }
+    if(id==='rite'&&Math.random()<dt*0.4) vowel(rnd(98,110),3.2,0.02,0,520,860,1.5);
+    if(id==='moth'&&Math.random()<dt*8) noise(0.05,0.012,rnd(1500,2600),0,'bandpass',3);
+    /* 低 SAN：心跳 */
+    if(san<38){
+      L.nextBeat-=dt;
+      if(L.nextBeat<=0){
+        var bpm=70+(38-san)*2.2; L.nextBeat=60/bpm;
+        var hv=0.05+(38-san)/38*0.07;
+        tone(58,0.18,'sine',hv,38); tone(52,0.2,'sine',hv*0.7,34,0.16);
+      }
+    }
+    /* 上下课铃：时段一变就响 */
+    try{
+      var per=periodAt(S.tsec)[2];
+      if(L.lastPeriod!==null&&per!==L.lastPeriod&&S.mode==='in'){ schoolBell(); }
+      else if(L.lastPeriod!==null&&per!==L.lastPeriod){ schoolBell(0.4); }
+      L.lastPeriod=per;
+    }catch(e){}
+    L.nextStinger-=dt*(1+tension*1.5);
+    if(L.nextStinger<=0){ L.nextStinger=rnd(28,60); stinger(); }
+  }
+  function schoolBell(v){
+    v=v===undefined?1:v;
+    var a=ctx(); if(!a) return;
+    var i; for(i=0;i<22;i++){ tone(i%2?1046:988,0.11,'square',0.010*v,0,i*0.11,0.5); }
+    for(i=0;i<22;i++){ noise(0.05,0.006*v,3000,i*0.11,'bandpass',2,0.4); }
+  }
+  var DEATH_SND={
+    drown:function(){ for(var i=0;i<14;i++) tone(rnd(300,700),0.12,'sine',0.05,rnd(900,1400),i*0.12+Math.random()*0.05,0.4); noise(2.4,0.10,600,0,'lowpass',0.5,0.5,0.6); },
+    swarm:function(){ for(var i=0;i<40;i++) noise(0.06,0.03,rnd(1200,3000),i*0.05,'bandpass',3); },
+    ring:function(){ vowel(98,3.4,0.05,0,520,860,1.5); vowel(147,3.4,0.03,0.2,600,1000,1.5); bellHit(196,0.05,0.4); },
+    neck:function(){ for(var i=0;i<10;i++) noise(0.14,0.05,rnd(200,500),i*0.24,'lowpass',4,0.4); tone(80,2.4,'sawtooth',0.04,260,0.3,0.3); },
+    laugh:function(){ for(var i=0;i<9;i++) vowel(220+i*12,0.22,0.05,i*0.24,800,1250,4); },
+    bell:function(){ bellHit(110,0.1,0); bellHit(110,0.08,1.4); },
+    voice:function(){ noise(1.6,0.05,2000,0,'bandpass',1.5,0.3); vowel(160,1.6,0.04,0.2,600,1700,6); },
+    follow:function(){ for(var i=0;i<8;i++){ noise(0.08,0.07,300,i*0.5,'lowpass'); tone(i%4===0?440:330,0.1,'square',0.012,0,i*0.5); } },
+    lamps:function(){ for(var i=0;i<8;i++) noise(0.05,0.05,5000,i*0.18,'highpass'); noise(0.4,0.12,1200,1.6,'lowpass',1,0.5); },
+    gaze:function(){ tone(1800,1.4,'sawtooth',0.02,2400,0,0.6); tone(1900,1.4,'sawtooth',0.02,2550,0,0.6); },
+    stare:function(){ for(var i=0;i<30;i++) noise(0.12,0.025,rnd(300,900),0.6+Math.random()*0.2,'lowpass',2,0.3); },
+    freeze:function(){ for(var i=0;i<20;i++) tone(rnd(2500,4500),0.08,'sine',0.02,0,i*0.07,0.6); },
+    shatter:function(){ for(var i=0;i<26;i++) tone(rnd(2000,5200),0.3,'triangle',0.03,0,i*0.03,0.5); },
+    grip:function(){ noise(0.25,0.12,500,0); for(var i=0;i<6;i++) noise(0.2,0.04,250,0.3+i*0.2,'lowpass',2); },
+    names:function(){ for(var i=0;i<12;i++) vowel(130+Math.random()*80,0.3,0.03,i*0.12,600,1000,2); }
+  };
   return {
     moonlight: moonlight,
     resume:function(){ ctx(); },
-    ambient:function(){
-      var a=ctx(); if(!a||ambNodes) return;
-      try{
-        var g=a.createGain(); g.gain.value=0.030;
-        var d=master(); if(!d) return;
-        g.connect(d);
-        var o1=a.createOscillator(), o2=a.createOscillator(), f=a.createBiquadFilter();
-        o1.type='sine'; o1.frequency.value=52;
-        o2.type='sine'; o2.frequency.value=78.5;
-        f.type='lowpass'; f.frequency.value=200;
-        o1.connect(f); o2.connect(f); f.connect(g);
-        o1.start(); o2.start();
-        ambNodes={g:g,o1:o1,o2:o2};
-      }catch(e){}
-    },
-    stopAmbient:function(){
-      if(!ambNodes) return;
-      try{ ambNodes.o1.stop(); ambNodes.o2.stop(); }catch(e){}
-      ambNodes=null;
-    },
+    ambient:function(){ var a=ctx(); if(!a) return; try{ buildLayers(); }catch(e){} bgOn=true; },
+    stopAmbient:function(){ bgOn=false; },
+    tick:function(dt){ try{ if(L) tick(dt); else if(bgOn) buildLayers(); }catch(e){} },
     setVol:function(v){ vol=Math.max(0,Math.min(1,v)); if(mg){ try{ mg.gain.value=vol; }catch(e){} } },
     getVol:function(){ return vol; },
-    step:function(){ noise(0.10,0.045,320); },
-    click:function(){ tone(880,0.05,'square',0.03,400); },
+    step:function(){
+      var inside=(typeof S!=='undefined'&&S.mode==='in');
+      var run=(typeof S!=='undefined'&&S.run);
+      if(inside) noise(0.07,run?0.05:0.035,run?1500:1150,0,'bandpass',1.2,0.25);
+      else noise(0.11,run?0.06:0.04,run?520:380,0,'lowpass',0.7,0.05);
+    },
+    click:function(){ tone(880,0.05,'square',0.02,400); },
     blink:function(){ tone(1400,0.16,'sine',0.04,300); },
-    door:function(){ noise(0.26,0.05,520); tone(180,0.22,'sine',0.03,90); },
-  anim:function(mode){
-    var dur=mode===2?3.0:(mode===3?2.6:2.4);
-    GLR.deathAnim={mode:mode,t:0,dur:dur};
-  },
-  death:function(){ tone(70,1.6,'sawtooth',0.11,24); noise(1.4,0.07,240); },
-    bell:function(){ for(var i=0;i<3;i++) setTimeout(function(){ tone(720,0.9,'sine',0.05,360); },i*260); },
-    alarm:function(){ tone(520,0.8,'square',0.05,180); }
+    door:function(){ tone(140,0.5,'sawtooth',0.018,260,0,0.3); noise(0.4,0.03,900,0.05,'bandpass',3,0.3,0.15); noise(0.07,0.06,600,0.48,'lowpass'); },
+    stairs:function(){ for(var i=0;i<5;i++) noise(0.07,0.04,1000,i*0.16,'bandpass',1.2,0.6); },
+    pickup:function(){ tone(1320,0.18,'sine',0.025,0,0,0.5); tone(1760,0.22,'sine',0.018,0,0.06,0.5); },
+    anim:function(mode){ var dur=mode===2?3.0:(mode===3?2.6:2.4); GLR.deathAnim={mode:mode,t:0,dur:dur}; },
+    death:function(){ tone(70,1.6,'sawtooth',0.11,24); noise(1.4,0.07,240); },
+    deathFx:function(type){
+      tone(55,2.2,'sawtooth',0.10,22,0,0.3); noise(1.6,0.08,240,0,'lowpass',1,0.4);
+      tone(1500,0.9,'sawtooth',0.018,900,0.05,0.6); tone(1590,0.9,'sawtooth',0.018,960,0.05,0.6);
+      var f=DEATH_SND[type]; if(f) try{ f(); }catch(e){}
+    },
+    sting:function(){ tone(46,1.2,'sawtooth',0.08,30); tone(1250,0.6,'sawtooth',0.02,800,0,0.6); tone(1330,0.6,'sawtooth',0.02,850,0,0.6); noise(0.4,0.06,700,0,'lowpass',1,0.4); },
+    wake:function(){ noise(0.6,0.05,1200,0,'lowpass',0.7,0.5,0.25); tone(220,1.8,'sine',0.03,110,0.1,0.8); },
+    bell:function(){ bellHit(220,0.05,0); },
+    bigBell:function(v){ bellHit(98,0.12*(v===undefined?1:v),0,0.7); },
+    schoolBell:schoolBell,
+    alarm:function(){ tone(520,0.8,'square',0.05,180); },
+    anomaly:function(id){
+      var i;
+      tone(41,2.6,'sine',0.08,30,0,0.5);               /* 每次异象开头：一声很低的下沉 */
+      if(id==='rain'){ noise(3.0,0.14,180,0.2,'lowpass',0.8,0.6,0.3); }
+      else if(id==='turn'){ noise(1.1,0.03,1400,0,'bandpass',2,0.1,0.5); }
+      else if(id==='broad'){ tone(784,0.5,'sine',0.04,0,0,0.5); tone(622,0.8,'sine',0.04,0,0.45,0.5); noise(2.6,0.03,2200,0.9,'bandpass',1,0.2); vowel(150,2.2,0.03,1.0,620,1800,7); }
+      else if(id==='bell13'){ for(i=0;i<13;i++) bellHit(98,0.06,i*1.12,0.6); }
+      else if(id==='exercise'){ for(i=0;i<16;i++){ tone(i%4===0?523:392,0.09,'square',0.012,0,i*0.55,0.6); noise(0.05,0.03,800,i*0.55,'bandpass',2,0.6); } }
+      else if(id==='bells'){ for(i=0;i<30;i++) tone(rnd(2200,3400),0.5,'triangle',0.012,0,Math.random()*1.6,0.4); }
+      else if(id==='hand'){ noise(0.5,0.04,300,0.2,'lowpass',3,0.3,0.2); }
+      else if(id==='repeat'){ for(i=0;i<5;i++) noise(0.25,0.02,2000,i*0.3,'bandpass',5,0.3,0.1); }
+      else if(id==='loop'){ for(i=0;i<8;i++) noise(0.08,0.04,1100,i*0.45,'bandpass',1.2,0.9); }
+      else if(id==='roster'){ for(i=0;i<4;i++) noise(0.2,0.03,4000,i*0.25,'highpass',0.5,0.2); }
+      else if(id==='cold'){ for(i=0;i<6;i++) noise(0.08,0.05,320,i*0.6,'lowpass',2,0.6); }
+      else if(id==='shifting'){ tone(36,6,'sawtooth',0.05,31,0,0.6); }
+      else if(id==='stare'){ for(i=0;i<20;i++) noise(0.14,0.03,rnd(300,700),0.4+Math.random()*0.25,'lowpass',2,0.3); }
+      else if(id==='feast'){ for(i=0;i<10;i++) tone(rnd(2400,3200),0.15,'triangle',0.01,0,Math.random()*3,0.6); }
+      else if(id==='necker'){ for(i=0;i<10;i++) noise(0.1,0.035,350,i*0.6,'lowpass',1,0.2); }
+      else if(id==='shadow'){ noise(1.8,0.04,500,0,'lowpass',1,0.4,1.6); }
+      else if(id==='twin'){ for(i=0;i<6;i++) noise(0.08,0.04,900,i*0.5+0.25,'bandpass',1.2,0.5); }
+      else if(id==='moth'){ for(i=0;i<30;i++) noise(0.05,0.02,rnd(1500,2600),i*0.07,'bandpass',3); }
+    },
+    anomalyEnd:function(id){ tone(330,1.6,'sine',0.01,320,0,0.8); }
   };
 })();
 
@@ -6053,7 +7298,7 @@ function loadGame(){
 }
 
 function onEnterRoom(id){
-  if(id==='garage1') os('我：车库里没有灯。',2.6);
+  if(id==='garage1') os('我：车库里没有灯。空气是潮的，有一股铁和机油的味道。远处有水在滴。',3.6);
   spotTick();
 }
 
@@ -6090,7 +7335,7 @@ function update(dt){
 }
 function render(dt){
   if(!GLR.renderer) return;
-  if(S.dead){ GLR.hurt=Math.min(1,GLR.hurt+dt*0.15); }
+  if(S.dead){ GLR.hurt=Math.min(0.85,GLR.hurt+dt*0.12); }
   else { GLR.hurt=Math.max(0,GLR.hurt-dt*0.6); }
   GLR.flash=Math.max(0, (GLR.flash||0)-dt*1.7);
   updateLighting();
@@ -6109,6 +7354,7 @@ function render(dt){
     } else { GLR.roamFig.visible=false; }
   }
   try{ anfxUpdate(dt); }catch(e){}
+  try{ hallucTick(dt); }catch(e){}
   try{ PCGAME.tick(dt); }catch(e){}
   try{ updateIntro(dt); }catch(e){}
   try{
@@ -6123,6 +7369,7 @@ function render(dt){
   try{ if(DEV.on) Dev.pos(); }catch(e){}
   try{ if(DEV.on&&GLR.time%0.4<0.05) Dev.look(); }catch(e){}
   try{ if(typeof AMB_ON!=='undefined'){ if(AMB_ON&&S.screen==='play'){ if(!SFX._ambOn){ SFX.ambient(); SFX._ambOn=true; } } else if(!AMB_ON&&SFX._ambOn){ SFX.stopAmbient(); SFX._ambOn=false; } } }catch(e){}
+  try{ SFX.tick(dt); }catch(e){}
   GLR.cam.updateMatrixWorld();
   entFace();
   var u=GLR.postMat.uniforms;
@@ -6166,6 +7413,8 @@ function drawMini(dt){
   c.clearRect(0,0,W,H);
   c.strokeStyle='rgba(120,180,150,.32)'; c.lineWidth=1;
   c.strokeRect(X(BOUND.x0),Y(BOUND.y0),bw*sc,bh*sc);
+  c.fillStyle='rgba(170,180,170,.22)';
+  for(var ri=0;ri<ROADS.length;ri++){ var rd=ROADS[ri]; c.fillRect(X(rd[0]),Y(rd[1]),(rd[2]-rd[0])*sc,(rd[3]-rd[1])*sc); }
   for(var i=0;i<OBJ.length;i++){
     var o=OBJ[i];
     if(o.k==='roof') c.fillStyle='rgba(190,125,116,.55)';
@@ -6250,7 +7499,8 @@ function updateHUD(){
   var pr=document.getElementById('prompt');
   var hint='';
   if(!S.dead&&S.screen==='play'&&!UI.anyOpen()&&!PAUSE.on&&!DLG.open){
-    if(S.seated) hint='E 站起来';
+    if(nearRoster()) hint='E 那张名单';
+    else if(S.seated) hint='E 站起来';
     else if(S.mode==='in'&&INTERIORS[S.room]&&hit2_seatNear(INTERIORS[S.room])) hint='E 坐下';
     else if(S.mode==='in'){
       var h=nearWorld(24);
@@ -6265,14 +7515,22 @@ function updateHUD(){
         else if(h.ch==='S') hint='E 上下楼';
         else if(h.ch==='P') hint='E 坐下';
         else if(h.ch==='c') hint='E 上车';
-        else if(h.ch==='D') hint='E 使用终端';
+        else if(h.ch==='D') hint=(S.room==='lab3')?'E 门禁管理终端':'E 使用终端';
         else if(h.ch==='X') hint='E 钻进去';
         else if(h.ch==='K') hint=(INTERIORS[S.room]&&INTERIORS[S.room].host==='admin')?'E 看办公桌':'E 看实验台';
-        else if(h.ch==='Z') hint='E 调物理装置';
+        else if(h.ch==='Z') hint='E 放开单摆';
         else if(h.ch==='C') hint='E 开离心机';
         else if(h.ch==='N') hint='E 看显微镜';
         else if(h.ch==='Y') hint='E 转地球仪';
         else if(h.ch==='p') hint='E 弹琴';
+        else if(h.ch==='U') hint='E 撞钟';
+        else if(h.ch==='A') hint='E 看供桌';
+        else if(h.ch==='x') hint='E 看挂图';
+        else if(h.ch==='V') hint='E 上车';
+        else if(h.ch==='B'||h.ch==='G') hint='E 隔间';
+        else if(h.ch==='w') hint='E 洗把脸';
+        else if(h.ch==='b') hint=(sanActFor(INTERIORS[S.room],h)?'E 躺一会儿':'E 床');
+        else if(h.ch==='n') hint='E 用电脑';
         else hint='E 翻找';
       }
     }else{
@@ -6281,7 +7539,8 @@ function updateHUD(){
       if(nb) hint='E 进入 '+nb.obj.n;
       else if(oact) hint='E '+SAN_ACTS[oact].n+'（SAN +'+SAN_ACTS[oact].san+'，'+SAN_ACTS[oact].min+' 分钟）';
       else if(Math.sqrt(dist2(GATE_N.x*SC,GATE_N.y*SC,S.x,S.y))<70) hint='E 校门';
-      else if(Math.sqrt(dist2(GATE_W.x*SC,GATE_W.y*SC,S.x,S.y))<70) hint='E 东小门';
+      else if(Math.sqrt(dist2(GATE_W.x*SC,GATE_W.y*SC,S.x,S.y))<70) hint='E 西小门';
+      else if(Math.sqrt(dist2(GATE_S.x*SC,GATE_S.y*SC,S.x,S.y))<70) hint='E 南门';
     }
   }
   if(pr){
@@ -6315,7 +7574,8 @@ function freshState(diff){
   S.ang=PI/2; S.pitch=0; S.eyeH=EYE;
   S.hiddenLatch=false; S.hiddenAsked=false; S.dangerSeen={};
   RT=newRT(); USE={torch:false,phone:false,brollyShield:false}; OPENDOORS={};
-  AN.id=null; AN.active=false; AN.next=45; AN.rained=false; AN.cool={}; AN.lastBig=false; AN.t=0; AN.acc=0;
+  AN.id=null; AN.active=false; AN.next=(S.diff==='hard')?40:60; AN.rained=false; AN.cool={}; AN.lastBig=false; AN.t=0; AN.acc=0;
+  AN.pre=null; AN.preNext=0; AN.locked=false; AN.lockWait=0;
   ROAM.on=false;
   ENTS=[]; PAUSE.on=false;
   try{ NC.done=false; ncClear(); }catch(e){}
@@ -6333,8 +7593,11 @@ function loadSet(){
   try{
     var s=localStorage.getItem('zw3d_set');
     if(s){ var o=JSON.parse(s); for(var k in o) if(SET.hasOwnProperty(k)) SET[k]=o[k]; }
+    else if(IS_TOUCH) SET.q=0;          /* 手机第一次打开：性能优先 */
   }catch(e){}
   SHAKE_ON=!!SET.shake; SUB_MULT=[0.6,1.0,1.6][SET.sub]||1.0; AMB_ON=!!SET.amb;
+  QUALITY=(SET.q===0||SET.q===2)?SET.q:1;
+  try{ var mq=document.getElementById('mq'); if(mq) mq.value=String(QUALITY); }catch(e){}
   try{ SFX.setVol(SET.vol/100); }catch(e){}
   try{ if(GLR.postMat) GLR.postMat.uniforms.uBright.value=Math.max(0.4,Math.min(2.0,(SET.bright||100)/100)); }catch(e){}
 }
@@ -6359,15 +7622,18 @@ var Settings={
   },
   q:function(i){ SET.q=i; QUALITY=i; paintSet(); saveSet();
     try{ resizeGL(); }catch(e){}
-    toast(['低画质','中画质','高画质'][i]); },
+    /* 画质同时决定树、草、灌木的数量：在室外就当场重建 */
+    try{ if(S.screen==='play'&&S.mode==='out') enterWorldOut(); }catch(e){}
+    toast(['流畅：少树、无草、低分辨率','均衡','精细：更多树和草'][i]); },
   shake:function(off){ SET.shake=off?0:1; SHAKE_ON=!off; paintSet(); saveSet(); },
   amb:function(on){ SET.amb=on; AMB_ON=!!on; paintSet(); saveSet(); if(on) SFX.ambient(); else SFX.stopAmbient(); }
 };
 var DEV={on:false,fast:false,god:false};
 var DEV_POI=[
-  ['北门(校外)',514,118],['西门',250,626],['南门',394,1010],
-  ['大操场',344,350],['花园雕塑',535,1040],['车库入口',390,165],
-  ['宿舍区',550,1160],['食堂',600,1160],['教学楼前',514,900]
+  ['北门',514,115],['西小门',214,624],['南门',386,1276],
+  ['大操场',344,350],['花园雕塑',535,1020],['车库入口',485,163],
+  ['宿舍区',420,1160],['食堂西门',530,1160],['教学楼前',561,995],
+  ['东干道',704,600],['东围墙',800,700],['垃圾房',768,1134]
 ];
 var DEV_DEATH=[
   ['黑影逼近','vignette'],['地面翻起','floor'],['脚下伸手','grip'],['侧向长条','neck'],
@@ -6550,11 +7816,6 @@ var Dev={
       AN.lastBig=!AN_SMALL[id];
       os('【Dev】'+((AN_NAME&&AN_NAME[id])||id),2.6);
       anOn(id);
-      try{
-        var FX={rain:1,moth:1,exercise:1,necker:1,twin:1,hand:1,shadow:1,leak:1,rite:1,feast:1,
-          lamps:1,chalk:1,roster:1,broad:1,repeat:1,shifting:1,cold:1};
-        if(FX[id]) anfxSpawn(id,S.x,S.y);
-      }catch(e){}
       toast('异象：'+id);
     }catch(e){ toast('触发失败：'+e.message); }
   },
@@ -6597,9 +7858,9 @@ var Game={
       setTimeout(function(){ try{ proShow(); }catch(e){} },320);
     }else{
       try{ GLR.worldNorm=0; }catch(e){}      /* 老玩家直接进里世界，没有"正常世界"那一段 */
-      setTimeout(function(){ try{ os('我：今天和昨天没有什么不一样。',3.8); }catch(e){} },2200);
-      introT1=setTimeout(function(){ os('我：我兜里有一张学生证。照片上的人我不认识。',4.6); },6200);
-      os('我：11:40。早读。我坐在这里。',4.6);
+      setTimeout(function(){ try{ os('我：今天和昨天没有什么不一样。每一天，都和昨天没有什么不一样。',4.0); }catch(e){} },2400);
+      introT1=setTimeout(function(){ os('我：兜里有一张学生证。照片上的人我不认识，可是班号、学号，都是我的。',4.8); },6800);
+      os('我：11:40。第四节。我坐在自己的位子上——至少，名牌上写的是我的名字。',4.8);
     }
     SFX.resume();
     }catch(e){ try{ showErr('Game.start: '+e.message); }catch(_e){} }
@@ -6771,23 +8032,30 @@ function initMobileShell(){
 function updateTouchUI(){
   var el=document.getElementById('touch');
   if(!el) return;
-  var on=IS_TOUCH&&S.screen==='play'&&!S.dead&&!PAUSE.on&&!UI.anyOpen()&&!DLG.open;
+  /* 以前这里还带着 !DLG.open —— 只要有一句字幕（异象一开始必有一句）摇杆就整个消失，
+     暴雨里根本跑不掉。字幕本身不挡触摸，不该收控件。 */
+  var on=IS_TOUCH&&S.screen==='play'&&!S.dead&&!PAUSE.on&&!UI.anyOpen()&&!(PRO&&PRO.on);
   var want=on?'block':'none';
-  if(el.style.display!==want) el.style.display=want;
+  if(el.style.display!==want){
+    el.style.display=want;
+    if(!on){ TOUCH.active=false; TOUCH.dx=TOUCH.dy=0; TOUCH.run=false;
+      var kn=document.getElementById('knob'); if(kn) kn.style.transform='';
+      var trb=document.getElementById('tRun'); if(trb) trb.classList.remove('held'); }
+  }
 }
 
 var PRO_PAGES=[
   '你是这学期转来的。',
-  '高二（二）班。第四节，语文。',
-  '前排的人回头问你借橡皮——你还没记住他的名字。',
-  '才第三天。这栋楼你只认得三层。',
-  '粉笔灰在光里飘。你数到第七秒。',
-  '眼皮很重。黑板上的字开始往下淌。',
-  '你把脸埋进胳膊里。',
+  '高二（二）班。第四节，语文。老师在念一篇课文，念到一半，又从头念了一遍。',
+  '前排的人回头问你借橡皮。你还没记住他的名字。\n他好像也不记得你的。',
+  '才第三天。这栋楼你只认得三层。\n可是你数过——楼梯一共有五层半。',
+  '粉笔灰在光里飘。你开始数秒：一，二，三……数到第七秒的时候，它们停在了半空。',
+  '眼皮很重。黑板上的字开始往下淌，淌成一行一行的竖线。',
+  '你把脸埋进胳膊里。袖子上有一股不属于你的味道。',
   '……',
-  '你睁开眼。教室里一个人也没有。',
-  '窗外的颜色不见了。走廊里没有脚步声。',
-  '你确定：这不是你转来的那个学校。'
+  '你睁开眼。\n教室里还是坐满了人。只是没有一个人在呼吸。',
+  '窗外的颜色不见了。走廊里很安静，安静得能听见灯管里的电流。',
+  '下课铃没有响。\n你忽然很确定：这不是你转来的那个学校。\n而它，已经知道你醒了。'
 ];
 var PRO={on:false,i:0,seen:false,woke:false,see:false};
 function eyelid(close,mid,open){
@@ -6839,7 +8107,7 @@ function proEnd(){
   proMark();
   try{ GLR.worldNorm=0; }catch(e){}
   try{ ncFlip(); }catch(e){}
-  try{ os('我：11:40。早读。我坐在这里。',4.6); }catch(e){}
+  try{ os('我：11:40。第四节。我坐在自己的位子上——至少，名牌上写的是我的名字。',4.8); }catch(e){}
 }
 function proSetText(txt){
   var t=document.getElementById('protext');
