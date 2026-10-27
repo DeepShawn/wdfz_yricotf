@@ -17,6 +17,7 @@ function anfxW2S(wx,wy){
 function anfxClear(){
   if(ANFX.grp){ GLR.scene.remove(ANFX.grp); ANFX.grp=null; }
   ANFX.kind=null; ANFX.items=[]; ANFX.t=0;
+  GLR.gazeT=0; GLR.gazeShake=0;
 }
 function anfxMat(col,op){
   return new THREE.MeshBasicMaterial({color:col,transparent:(op!==undefined),opacity:(op===undefined?1:op),fog:true});
@@ -259,6 +260,25 @@ function anfxSpawn(kind,wx,wy){
       rd.rotation.x=-Math.PI/2; rd.rotation.z=-ang0-Math.PI/2;
       grp.add(rd); ANFX.items.push(rd);
     }
+  } else if(kind==='stare'){
+    /* 全体回头：教室四面墙上一只只睁开眼睛（参考《废墟图书馆》"目光"） */
+    var spots=gazeWallSpots(INTERIORS[S.room],QUALITY===0?14:24,12), gi;
+    for(gi=0;gi<spots.length;gi++){
+      var gs=spots[gi], gq=anfxW2S(gs.wx,gs.wy);
+      var ge=gazeEye(0.8+Math.random()*0.9);
+      var side=(Math.random()-0.5)*0.8*(TTILE*U2M);
+      ge.position.set(gq.x+gs.nx*0.12+(gs.nz?side:0), 0.9+Math.random()*1.9, gq.z+gs.nz*0.12+(gs.nx?side:0));
+      ge.userData={d:0.2+Math.random()*1.4, w:ge.scale.x, ph:Math.random()*6.283, blink:3+Math.random()*5};
+      grp.add(ge); ANFX.items.push(ge);
+    }
+    for(gi=0;gi<(QUALITY===0?4:8);gi++){       /* 还有几只就浮在你面前的半空里 */
+      var fa3=S.ang+(Math.random()-0.5)*1.9, fr3=2.6+Math.random()*3.2;
+      var fq3=anfxW2S(S.x+Math.cos(fa3)*fr3/U2M, S.y+Math.sin(fa3)*fr3/U2M);
+      var fe=gazeEye(0.6+Math.random()*0.7);
+      fe.position.set(fq3.x, 1.7+Math.random()*1.0, fq3.z);
+      fe.userData={d:0.5+Math.random()*1.5, w:fe.scale.x, ph:Math.random()*6.283, blink:3+Math.random()*5};
+      grp.add(fe); ANFX.items.push(fe);
+    }
   } else if(kind==='shadow'){
     var sm=anfxMat(0x05070a,0.72);
     var sq=new THREE.Mesh(new THREE.PlaneGeometry(0.9,1.6),sm);
@@ -403,28 +423,20 @@ function deathFX(type){
     }
     else if(T==='gaze'){
       var gp=anfxW2S(S.x,S.y);
-      var eyeY=anfxMat(0xe2a92e,1.0);      /* 睫毛/眼睑的黄 */
-      var eyeR=anfxMat(0xad2018,1.0);      /* 虹膜的红 */
-      var eyeD=anfxMat(0x120a08,1.0);      /* 瞳孔 */
-      var eyeN=(T==='stare')?20:15, ei, ek;
+      /* 黑暗里一圈一圈睁开的眼睛：火苗一样的黄眼眶，螺旋的金色 / 血红虹膜（"目光"） */
+      var eyeN=(T==='stare')?26:20, ei;
       for(ei=0;ei<eyeN;ei++){
         var ea=Math.random()*6.283, er=1.9+Math.random()*3.8;
-        var ey=0.45+Math.random()*2.0;
-        var es=0.7+Math.random()*0.8;              /* 大小不一，像画上去的 */
-        var eg=new THREE.Group();
-        for(ek=0;ek<11;ek++){
-          var ka=ek/11*6.283;
-          var lash=anfxBox(eg,eyeY,0.115,0.05,0.02,Math.cos(ka)*0.175,Math.sin(ka)*0.125,0);
-          lash.rotation.z=ka;
-          lash.scale.set(0.85+Math.random()*0.55,0.85+Math.random()*0.5,1);
-        }
-        anfxBox(eg,eyeR,0.21,0.135,0.012,0,0,0.012);          /* 眼白/虹膜 */
-        anfxBox(eg,eyeD,0.072,0.072,0.010,0,0,0.024);         /* 瞳孔 */
+        var ey=0.45+Math.random()*2.2;
+        var es=0.55+Math.random()*0.75;            /* 大小不一，像画上去的 */
+        var eg=gazeEye(1);
+        eg.material.opacity=1;
         eg.position.set(gp.x+Math.cos(ea)*er, ey, gp.z+Math.sin(ea)*er);
-        eg.scale.setScalar(es);
+        eg.scale.set(es,es*0.6875,1);
         eg.userData={i:ei, a:ea, r:er, y:ey, s:es, blink:Math.random()*6.283};
         grp.add(eg); push(eg);
       }
+      GLR.gazeT=1;
     }
     else if(T==='voice'){
       for(i=0;i<9;i++){
@@ -780,7 +792,6 @@ function anfxUpdate(dt){
         ob.position.z=pp.z+Math.sin(u.a)*rr;
       }
     } else if(dtp==='gaze'||dtp==='stare'){
-      var camG=GLR.cam.position;
       var near=Math.min(1,Math.max(0,(kk-1.0)/1.4));            /* 1 秒后开始逼近 */
       for(it=0;it<ANFX.items.length;it++){
         ob=ANFX.items[it]; var eu=ob.userData||{};
@@ -794,10 +805,10 @@ function anfxUpdate(dt){
         ob.position.x=eu.cx+Math.cos(eu.a)*rr3;
         ob.position.z=eu.cz+Math.sin(eu.a)*rr3;
         ob.position.y=eu.by+near*0.35;
-        if(ob.lookAt) ob.lookAt(camG.x,camG.y,camG.z);   /* 永远正对镜头 */
         var bl=Math.sin(kk*2.2+eu.blink);
         var open=bl>0.93?0.12:1;                          /* 眨眼 */
-        ob.scale.set(eu.s*(1+near*0.5), eu.s*open*(1+near*0.5), eu.s*(1+near*0.5));
+        var gk=eu.s*(1+near*0.5);
+        ob.scale.set(gk, gk*0.6875*open, 1);              /* Sprite 本来就永远正对镜头 */
       }
     } else if(dtp==='grip'){
       var sinkT=Math.min(1,kk/2.4);
@@ -866,6 +877,21 @@ function anfxUpdate(dt){
         ANFX.grp.position.z+=dz/dl*sp;
         ANFX.grp.rotation.y=Math.atan2(dx,dz);
       }
+    }
+  } else if(ANFX.kind==='stare'){
+    /* 站着不动，眼睛就一只只睁得更开；走起来，它们半眯着跟着你 */
+    var hold=(AN.active&&AN.id==='stare')?clamp(AN.acc/1.8,0,1):0;
+    var hit=(AN.active&&AN.data&&AN.data.hit)?1:0;
+    GLR.gazeT=0.35+0.45*hold+0.2*hit;
+    GLR.gazeShake=hit?0.55:hold*0.12;
+    for(i=0;i<ANFX.items.length;i++){
+      m=ANFX.items[i]; var gu=m.userData;
+      var ap=clamp((ANFX.t-gu.d)/0.6,0,1);                 /* 一只接一只睁开 */
+      var lid=0.30+0.70*Math.max(hold,hit);
+      if(Math.sin(ANFX.t*(6.283/gu.blink)+gu.ph)>0.97) lid*=0.1;   /* 偶尔眨一下 */
+      var pulse=1+0.05*Math.sin(ANFX.t*3.1+gu.ph)+0.25*hit;
+      m.scale.set(gu.w*pulse, gu.w*0.6875*lid*ap*pulse, 1);
+      m.material.opacity=ap*(0.75+0.25*Math.max(hold,hit));
     }
   } else if(ANFX.kind==='shadow'){
     var ps=anfxW2S(S.x,S.y);

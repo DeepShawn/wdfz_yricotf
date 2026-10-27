@@ -212,7 +212,7 @@ function entFace(){
 }
 
 var HAS_FX={rain:1,moth:1,exercise:1,necker:1,twin:1,hand:1,shadow:1,
-  leak:1,rite:1,feast:1,lamps:1,chalk:1,roster:1,broad:1,repeat:1,shifting:1,cold:1,raindots:1};
+  leak:1,rite:1,feast:1,lamps:1,chalk:1,roster:1,broad:1,repeat:1,shifting:1,cold:1,raindots:1,stare:1};
 /* 选一个在玩家前方、站得住的点（世界单位） */
 function aheadPoint(dist){
   var a, k, tries=[0,0.6,-0.6,1.2,-1.2,PI];
@@ -442,8 +442,9 @@ function anTick(dt){
       if(AN.t>18){ os('我：楼停下来了。整片校园里，只有钟楼一直没动——它在看着别的楼。',4.6); anEnd(); }
       break;
     case 'stare':
+      if(d.hit){ d.hitT+=dt; if(d.hitT>1.6) anEnd(); break; }   /* 墙上的眼睛全睁开，停一会儿再散 */
       if(!S.moving){ AN.acc+=dt; } else { AN.acc=Math.max(0,AN.acc-dt); }
-      if(AN.acc>1.8) anHurt('我站住了。于是全班一起站了起来，椅子腿在地上刮出同一声。然后他们又一起坐下。',18);
+      if(AN.acc>1.8){ d.hit=1; d.hitT=0; anHurt('我站住了。于是全班一起站了起来，椅子腿在地上刮出同一声。然后他们又一起坐下。',18,{keep:1}); }
       else if(AN.t>12){ os('我：他们慢慢地转回去了。最后转回去的，是我的同桌。',3.4); anEnd(); }
       break;
     case 'lamps':

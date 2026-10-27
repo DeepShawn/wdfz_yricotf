@@ -116,9 +116,10 @@ function updateLighting(){
   try{ refreshSky(); }catch(e){}
   if(!GLR.amb) return;
   var s=lightState(), i, sun=s.sun, oc=GLR.overcast;
-  GLR.amb.intensity=s.amb*(1-0.25*oc);
-  GLR.hemi.intensity=s.hemi*(1-0.30*oc);
-  GLR.moon.intensity=s.dir*(1-0.70*oc);
+  var gz=1-0.88*(GLR.gaze||0);              /* 被"目光"盯着的时候，屋里一下子暗下去 */
+  GLR.amb.intensity=s.amb*(1-0.25*oc)*gz;
+  GLR.hemi.intensity=s.hemi*(1-0.30*oc)*gz;
+  GLR.moon.intensity=s.dir*(1-0.70*oc)*gz;
   /* 颜色：白天偏暖白，霞光橙，夜里月光偏蓝 */
   var sunCol=mixRGB([0.86,0.88,0.90],[0.92,0.66,0.50],sun.gold);    /* 阴天的光偏冷、发灰 */
   var dc=mixRGB([0.55,0.66,0.86],sunCol,smooth01(0.0,0.35,s.day));
@@ -158,10 +159,10 @@ function updateLighting(){
     var blip=Math.sin(tt*0.9+ph*3.1);
     if(blip>0.992) flick*=0.45;
     if(s.day<0.3&&Math.sin(tt*0.37+ph*5.3)>0.985) flick*=0.15;   /* 夜里偶尔整盏暗下去一下 */
-    GLR.roomLights[i].intensity=base*Math.max(0.08,flick);
+    GLR.roomLights[i].intensity=base*Math.max(0.08,flick)*gz;
   }
   lampTick(s);
-  GLR.camLight.intensity=LCFG.camI+LCFG.camIk*s.day;
+  GLR.camLight.intensity=(LCFG.camI+LCFG.camIk*s.day)*gz;
 }
 /* 路灯：灯头在夜里自发光；离镜头最近的几盏配一盏真点光（数量固定，避免切场景时重编着色器） */
 var OUT_LAMPS=[];

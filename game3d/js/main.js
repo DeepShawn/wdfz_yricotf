@@ -82,6 +82,8 @@ function render(dt){
   GLR.fnNorm=GLR.fnNorm===undefined?0:GLR.fnNorm;
   GLR.fnNorm+= (_fnOn-GLR.fnNorm)*Math.min(1,dt*1.6);
   u.uFx.value=Math.max(GLR.fnNorm,(GLR.worldNorm||0),(GLRTEST.nofx?1:0));
+  GLR.gaze=(GLR.gaze||0)+((GLR.gazeT||0)-(GLR.gaze||0))*Math.min(1,dt*2.4);
+  u.uGaze.value=GLR.gaze;
   u.uHurt.value=GLR.hurt;
   u.uFlash.value=GLR.flash;
   u.uSan.value=clamp(S.san/100,0,1);
@@ -338,7 +340,7 @@ var Game={
     if(AN.id){
       try{
         var HAS_FX2={rain:1,moth:1,exercise:1,necker:1,twin:1,hand:1,shadow:1,
-          leak:1,rite:1,feast:1,lamps:1,chalk:1,roster:1,broad:1,repeat:1,shifting:1,cold:1};
+          leak:1,rite:1,feast:1,lamps:1,chalk:1,roster:1,broad:1,repeat:1,shifting:1,cold:1,stare:1};
         if(HAS_FX2[AN.id]) anfxSpawn(AN.id,S.x,S.y);
       }catch(e){}
     }

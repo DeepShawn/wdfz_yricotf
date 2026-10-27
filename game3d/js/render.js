@@ -101,14 +101,14 @@ function initGL(){
     uniforms:{
       tDiffuse:{value:rt.texture},
       uTime:{value:0}, uRes:{value:new THREE.Vector2(2,2)},
-      uSan:{value:1}, uHurt:{value:0}, uFlash:{value:0}, uDm:{value:0}, uDt:{value:0}, uBright:{value:1.0},
+      uSan:{value:1}, uHurt:{value:0}, uFlash:{value:0}, uDm:{value:0}, uDt:{value:0}, uBright:{value:1.0}, uGaze:{value:0},
       uFx:{value:GLRTEST.nofx?1.0:0.0}
     },
     vertexShader:'varying vec2 vUv;void main(){vUv=uv;gl_Position=vec4(position.xy,0.0,1.0);}',
     fragmentShader:[
 'precision highp float;',
 'uniform sampler2D tDiffuse;uniform float uTime;uniform vec2 uRes;',
-'uniform float uSan;uniform float uHurt;uniform float uFlash;uniform float uFx;uniform float uDm;uniform float uDt;uniform float uBright;',
+'uniform float uSan;uniform float uHurt;uniform float uFlash;uniform float uFx;uniform float uDm;uniform float uDt;uniform float uBright;uniform float uGaze;',
 'varying vec2 vUv;',
 'float hash(vec2 p){',
 '  p = fract(p * vec2(443.8975, 397.2973));',
@@ -125,7 +125,7 @@ function initGL(){
 '  vec3 col=texture2D(tDiffuse,uv).rgb;',
 '  col=aces(col*uBright*1.12);',
 '  float lum=dot(col,vec3(0.2126,0.7152,0.0722));',
-'  col=mix(vec3(lum),col,0.70);',
+'  col=mix(vec3(lum),col,0.70+0.25*uGaze);',
 '  col*=vec3(1.03,1.00,0.985);',
 '  float lm2=dot(col,vec3(0.299,0.587,0.114));',
 '  vec3 tint=mix(vec3(0.72,0.92,1.18), vec3(1.0), smoothstep(0.04,0.42,lm2));',
@@ -138,6 +138,9 @@ function initGL(){
 '  col*=mix(vec3(1.0),vec3(1.0,0.32,0.27),uHurt*0.85);',
 '  col=mix(col,vec3(0.16,0.0,0.0),uHurt*0.55*smoothstep(0.28,0.95,vg*1.3));',
 '  col+=vec3(0.90,0.95,1.0)*uFlash*0.8;',
+/* 目光：场景本身已经被压暗（lighting.js），这里再偏暖一点，四周沉进黑里；眼睛不吃光，保持亮黄 */
+'  col=mix(col,col*vec3(1.12,0.93,0.66),uGaze*0.7);',
+'  col=mix(col,vec3(0.022,0.011,0.0),uGaze*0.85*smoothstep(0.24,0.86,vg*1.25));',
       '  if(uDm>0.5&&uDm<1.5){',
       '    col*=1.0-uDt*0.72;',
       '    for(int i=0;i<12;i++){',

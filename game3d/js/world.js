@@ -310,6 +310,7 @@ function syncCamera(dt){
     if(S.death==='floor'||S.death==='deep'){ dyOff=-Math.min(1.25,k*0.62); }
     shake=Math.max(0,1-k*0.5);
   }
+  if(GLR.gazeShake&&!S.dead) shake=Math.max(shake,GLR.gazeShake);   /* 被盯着的时候，镜头在抖 */
   if(typeof SHAKE_ON!=='undefined' && !SHAKE_ON) shake=0;
   if(shake>0){
     dyOff+=(Math.random()-0.5)*0.06*shake;
